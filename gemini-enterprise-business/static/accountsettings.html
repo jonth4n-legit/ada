@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户设置</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            min-height: 100%;
+        }
+
+        .account-settings-container {
+            display: flex;
+            flex-direction: row;
+            gap: 2rem;
+            padding: 1.5rem;
+        }
+
+        .settings-section {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .settings-divider {
+            width: 1px;
+            background: var(--border-color);
+            margin: 0;
+            border: none;
+        }
+
+        .account-form {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="account-settings-container">
+        <!-- 修改用户名 -->
+        <div class="settings-section">
+            <h3 style="margin-bottom: 1rem; color: var(--text-primary); font-size: 1.1rem;">修改用户名</h3>
+            <form id="changeUsernameForm" class="account-form">
+                <div class="form-group">
+                    <label for="newUsername">新用户名 *</label>
+                    <input type="text" id="newUsername" name="new_username" required placeholder="请输入新用户名" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="usernamePassword">当前密码 *</label>
+                    <input type="password" id="usernamePassword" name="password" required placeholder="请输入当前密码以验证身份">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">修改用户名</button>
+                </div>
+            </form>
+        </div>
+
+        <hr class="settings-divider">
+
+        <!-- 修改密码 -->
+        <div class="settings-section">
+            <h3 style="margin-bottom: 1rem; color: var(--text-primary); font-size: 1.1rem;">修改密码</h3>
+            <form id="changePasswordForm" class="account-form">
+                <div class="form-group">
+                    <label for="oldPassword">当前密码 *</label>
+                    <input type="password" id="oldPassword" name="old_password" required placeholder="请输入当前密码">
+                </div>
+                <div class="form-group">
+                    <label for="newPassword">新密码 *</label>
+                    <input type="password" id="newPassword" name="new_password" required placeholder="请输入新密码（至少 6 位）" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">确认新密码 *</label>
+                    <input type="password" id="confirmPassword" name="confirm_password" required placeholder="请再次输入新密码" minlength="6">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">修改密码</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        // 通知父窗口模态框已打开
+        function notifyParentModalOpen() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'accountSettingsModalOpen' }, '*');
+            }
+        }
+        
+        // 通知父窗口模态框已关闭
+        function notifyParentModalClose() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'accountSettingsModalClose' }, '*');
+            }
+        }
+
+        window.closeAccountSettingsModal = function() {
+            if (window.parent && window.parent !== window) {
+                // 通知父窗口关闭模态框
+                window.parent.postMessage({ type: 'closeAccountSettingsModal' }, '*');
+            }
+            // 重置表单
+            document.getElementById('changeUsernameForm').reset();
+            document.getElementById('changePasswordForm').reset();
+        };
+
+        // 修改用户名
+        document.getElementById('changeUsernameForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const newUsername = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('usernamePassword').value;
+
+            if (!newUsername) {
+                alert('用户名不能为空');
+                return;
+            }
+
+            if (newUsername.length > 50) {
+                alert('用户名长度不能超过 50 个字符');
+                return;
+            }
+
+            try {
+                const response = await apiRequest('/admin/change-username', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        new_username: newUsername,
+                        password: password
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert('用户名修改成功，请使用新用户名重新登录');
+                    closeAccountSettingsModal();
+                    // 退出登录
+                    localStorage.removeItem('token');
+                    if (window.parent && window.parent !== window) {
+                        window.parent.location.href = '/static/index.html';
+                    } else {
+                        window.location.href = '/static/index.html';
+                    }
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '修改用户名失败');
+                }
+            } catch (error) {
+                alert('修改用户名失败: ' + error.message);
+            }
+        });
+
+        // 修改密码
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // 验证新密码和确认密码是否一致
+            if (newPassword !== confirmPassword) {
+                alert('新密码和确认密码不一致，请重新输入');
+                return;
+            }
+
+            // 验证新密码长度
+            if (newPassword.length < 6) {
+                alert('新密码长度至少为 6 位');
+                return;
+            }
+
+            try {
+                const response = await apiRequest('/admin/change-password', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        old_password: oldPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                if (response.ok) {
+                    alert('密码修改成功，请使用新密码重新登录');
+                    closeAccountSettingsModal();
+                    // 退出登录
+                    localStorage.removeItem('token');
+                    if (window.parent && window.parent !== window) {
+                        window.parent.location.href = '/static/index.html';
+                    } else {
+                        window.location.href = '/static/index.html';
+                    }
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '修改密码失败');
+                }
+            } catch (error) {
+                alert('修改密码失败: ' + error.message);
+            }
+        });
+
+        // 页面加载时通知父窗口
+        window.addEventListener('load', () => {
+            notifyParentModalOpen();
+        });
+        
+        // 页面卸载时通知父窗口
+        window.addEventListener('beforeunload', () => {
+            notifyParentModalClose();
+        });
+    </script>
+</body>
+
+</html>
+

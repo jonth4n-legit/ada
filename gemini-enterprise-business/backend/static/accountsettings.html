@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="account_settings">Account Settings</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            min-height: 100%;
+        }
+
+        .account-settings-container {
+            display: flex;
+            flex-direction: row;
+            gap: 2rem;
+            padding: 1.5rem;
+        }
+
+        .settings-section {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .settings-divider {
+            width: 1px;
+            background: var(--border-color);
+            margin: 0;
+            border: none;
+        }
+
+        .account-form {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="account-settings-container">
+        <!-- Change Username -->
+        <div class="settings-section">
+            <h3 style="margin-bottom: 1rem; color: var(--text-primary); font-size: 1.1rem;" data-i18n="change_username">Change Username</h3>
+            <form id="changeUsernameForm" class="account-form">
+                <div class="form-group">
+                    <label for="newUsername" data-i18n="new_username">New Username *</label>
+                    <input type="text" id="newUsername" name="new_username" required placeholder="Enter new username" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="usernamePassword" data-i18n="current_password">Current Password *</label>
+                    <input type="password" id="usernamePassword" name="password" required placeholder="Enter current password to verify">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary" data-i18n="change_username">Change Username</button>
+                </div>
+            </form>
+        </div>
+
+        <hr class="settings-divider">
+
+        <!-- Change Password -->
+        <div class="settings-section">
+            <h3 style="margin-bottom: 1rem; color: var(--text-primary); font-size: 1.1rem;" data-i18n="change_password">Change Password</h3>
+            <form id="changePasswordForm" class="account-form">
+                <div class="form-group">
+                    <label for="oldPassword" data-i18n="old_password">Current Password *</label>
+                    <input type="password" id="oldPassword" name="old_password" required placeholder="Enter current password">
+                </div>
+                <div class="form-group">
+                    <label for="newPassword" data-i18n="new_password">New Password *</label>
+                    <input type="password" id="newPassword" name="new_password" required placeholder="Enter new password (at least 6 characters)" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword" data-i18n="confirm_password">Confirm Password *</label>
+                    <input type="password" id="confirmPassword" name="confirm_password" required placeholder="Re-enter new password" minlength="6">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary" data-i18n="change_password">Change Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/app.js"></script>
+    <script>
+        // Notify parent window that modal has opened
+        function notifyParentModalOpen() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'accountSettingsModalOpen' }, '*');
+            }
+        }
+        
+        // 通知父窗口模态框已关闭
+        function notifyParentModalClose() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'accountSettingsModalClose' }, '*');
+            }
+        }
+
+        window.closeAccountSettingsModal = function() {
+            if (window.parent && window.parent !== window) {
+                // 通知父窗口关闭模态框
+                window.parent.postMessage({ type: 'closeAccountSettingsModal' }, '*');
+            }
+            // 重置表单
+            document.getElementById('changeUsernameForm').reset();
+            document.getElementById('changePasswordForm').reset();
+        };
+
+        // 修改用户名
+        document.getElementById('changeUsernameForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const newUsername = document.getElementById('newUsername').value.trim();
+            const password = document.getElementById('usernamePassword').value;
+
+            if (!newUsername) {
+                alert(I18n.t('username_empty'));
+                return;
+            }
+
+            if (newUsername.length > 50) {
+                alert(I18n.t('username_too_long'));
+                return;
+            }
+
+            try {
+                const response = await apiRequest('/admin/change-username', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        new_username: newUsername,
+                        password: password
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(I18n.t('username_changed'));
+                    closeAccountSettingsModal();
+                    // Logout
+                    localStorage.removeItem('token');
+                    if (window.parent && window.parent !== window) {
+                        window.parent.location.href = '/static/index.html';
+                    } else {
+                        window.location.href = '/static/index.html';
+                    }
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || I18n.t('operation_failed'));
+                }
+            } catch (error) {
+                alert(I18n.t('operation_failed') + ': ' + error.message);
+            }
+        });
+
+        // 修改密码
+        document.getElementById('changePasswordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // Verify passwords match
+            if (newPassword !== confirmPassword) {
+                alert(I18n.t('password_mismatch'));
+                return;
+            }
+
+            // Verify password length
+            if (newPassword.length < 6) {
+                alert(I18n.t('password_too_short'));
+                return;
+            }
+
+            try {
+                const response = await apiRequest('/admin/change-password', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        old_password: oldPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                if (response.ok) {
+                    alert(I18n.t('password_changed'));
+                    closeAccountSettingsModal();
+                    // Logout
+                    localStorage.removeItem('token');
+                    if (window.parent && window.parent !== window) {
+                        window.parent.location.href = '/static/index.html';
+                    } else {
+                        window.location.href = '/static/index.html';
+                    }
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || I18n.t('operation_failed'));
+                }
+            } catch (error) {
+                alert(I18n.t('operation_failed') + ': ' + error.message);
+            }
+        });
+
+        // 页面加载时通知父窗口
+        window.addEventListener('load', () => {
+            notifyParentModalOpen();
+        });
+        
+        // 页面卸载时通知父窗口
+        window.addEventListener('beforeunload', () => {
+            notifyParentModalClose();
+        });
+    </script>
+</body>
+
+</html>
+

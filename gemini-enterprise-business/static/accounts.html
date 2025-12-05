@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账号管理 - Gemini Link System</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .nav-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .nav-tab {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1rem;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .nav-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-available {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-unavailable {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .status-unknown {
+            background-color: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+        }
+
+        .account-form {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        .warning-box {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            color: var(--warning-color);
+        }
+
+        .warning-box svg {
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+
+        /* 批量操作按钮禁用状态样式 */
+        #bulkCopyBtn:disabled,
+        #bulkDeleteBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 表格复选框样式 */
+        .account-checkbox {
+            cursor: pointer;
+        }
+
+        #selectAllCheckbox {
+            cursor: pointer;
+        }
+
+        /* 表格操作按钮组样式 */
+        table td {
+            vertical-align: middle;
+        }
+
+        /* 操作列按钮间距优化 */
+        .btn-secondary, .btn-danger {
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h1>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    账号管理
+                </h1>
+                <div style="display: flex; gap: 1rem;">
+                    <a href="/static/dashboard.html" class="btn-secondary">返回密钥管理</a>
+                    <button id="keepAliveBtn" class="btn-secondary">保活</button>
+                    <button id="logoutBtn" class="btn-secondary">退出登录</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-main">
+            <div class="warning-box">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <strong>重要提示：</strong>修改账号配置后会自动重新加载，无需重启服务。请确保在修改前备份 .env 文件。
+            </div>
+
+            <!-- 账号列表 -->
+            <div class="card">
+                <div class="card-header-with-actions">
+                    <h2>账号列表</h2>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button id="bulkCheckBtn" class="btn-secondary" onclick="batchCheckAccounts()">批量检查</button>
+                        <button id="autoCheckBtn" class="btn-secondary" onclick="openAutoCheckModal()">自动检查</button>
+                        <button id="bulkCopyBtn" class="btn-secondary" disabled>批量复制</button>
+                        <button id="bulkDeleteBtn" class="btn-danger" disabled>批量删除</button>
+                        <button id="bulkAddAccountBtn" class="btn-secondary">批量添加</button>
+                        <button id="addAccountBtn" class="btn-primary">添加账号</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="accountsTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px; text-align: center;"><input type="checkbox" id="selectAllCheckbox" title="全选"></th>
+                                <th style="width: 80px;">索引</th>
+                                <th style="width: 150px;">名称</th>
+                                <th style="width: 120px; text-align: center;">Cookie 状态</th>
+                                <th style="width: 150px; text-align: center;">最后检查</th>
+                                <th style="width: 150px; text-align: center;">过期时间</th>
+                                <th style="width: 320px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accountsTableBody">
+                            <tr>
+                                <td colspan="7" class="loading">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加/编辑账号模态框 -->
+    <div id="accountModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加账号</h2>
+                <button class="modal-close" onclick="closeAccountModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="accountForm" class="account-form">
+                    <div class="form-group">
+                        <label for="accountName">账号名称 *</label>
+                        <input type="text" id="accountName" name="name" required placeholder="例如: account-1">
+                    </div>
+                    <div class="form-group">
+                        <label for="secureCSES">SECURE_C_SES *</label>
+                        <input type="text" id="secureCSES" name="secure_c_ses" required placeholder="请输入 SECURE_C_SES 值">
+                    </div>
+                    <div class="form-group">
+                        <label for="csesidx">CSESIDX *</label>
+                        <input type="text" id="csesidx" name="csesidx" required placeholder="请输入 CSESIDX 值">
+                    </div>
+                    <div class="form-group">
+                        <label for="configId">CONFIG_ID *</label>
+                        <input type="text" id="configId" name="config_id" required placeholder="请输入 CONFIG_ID 值">
+                    </div>
+                    <div class="form-group">
+                        <label for="hostCOSES">HOST_C_OSES (可选)</label>
+                        <input type="text" id="hostCOSES" name="host_c_oses" placeholder="请输入 HOST_C_OSES 值（可选）">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="closeAccountModal()">取消</button>
+                        <button type="submit" class="btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量添加账号模态框 -->
+    <div id="bulkAccountModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>批量添加账号</h2>
+                <button class="modal-close" onclick="closeBulkAccountModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="warning-box" style="margin-bottom: 1rem;">
+                    <strong>格式说明：</strong>
+                    <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        请粘贴包含账号信息的文本，系统会自动识别以下字段：<br>
+                        <strong>NAME</strong>、<strong>SECURE_C_SES</strong>、<strong>CSESIDX</strong>、<strong>CONFIG_ID</strong>、<strong>HOST_C_OSES</strong><br>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                            支持多种格式，例如：KEY=value、KEY: value、ACCOUNT1_NAME="value" 等，系统会自动识别。
+                        </span>
+                    </p>
+                </div>
+                <form id="bulkAccountForm" class="account-form">
+                    <div class="form-group">
+                        <label for="bulkAccountData">账号数据 *</label>
+                        <textarea 
+                            id="bulkAccountData" 
+                            name="bulk_data" 
+                            required 
+                            rows="10" 
+                            style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.9rem; font-family: monospace; resize: vertical;"
+                            placeholder="请输入账号数据，每行一个账号..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="closeBulkAccountModal()">取消</button>
+                        <button type="submit" class="btn-primary">批量添加</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自动检查配置模态框 -->
+    <div id="autoCheckModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>自动检查配置</h2>
+                <button class="modal-close" onclick="closeAutoCheckModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="autoCheckForm" class="account-form">
+                    <!-- 启用开关 -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 0.75rem; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <span style="font-weight: 500; font-size: 0.95rem;">启用自动检查</span>
+                            </div>
+                            <input type="checkbox" id="autoCheckEnabled" name="auto_check_enabled" style="width: 18px; height: 18px; cursor: pointer;">
+                        </label>
+                    </div>
+                    
+                    <!-- 检查间隔 -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="autoCheckInterval" style="display: block; margin-bottom: 0.4rem; font-weight: 500; font-size: 0.95rem;">
+                            检查间隔 <span style="color: var(--error-color);">*</span>
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input 
+                                type="number" 
+                                id="autoCheckInterval" 
+                                name="auto_check_interval" 
+                                min="5" 
+                                max="1440" 
+                                value="60" 
+                                required
+                                style="flex: 1; padding: 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-primary); font-size: 0.95rem;"
+                            >
+                            <span style="color: var(--text-secondary); white-space: nowrap; font-size: 0.9rem;">分钟</span>
+                        </div>
+                        <small style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.3rem; display: block;">
+                            范围：5-1440 分钟（建议 30-120 分钟）
+                        </small>
+                    </div>
+                    
+                    <!-- 自动修复开关 -->
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; padding: 0.75rem; background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color);">
+                            <input type="checkbox" id="autoCheckAutoFix" name="auto_check_auto_fix" checked style="width: 18px; height: 18px; cursor: pointer; margin-top: 2px; flex-shrink: 0;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 500; margin-bottom: 0.2rem; font-size: 0.95rem;">检测到无效 Cookie 时自动修复</div>
+                                <div style="color: var(--text-secondary); font-size: 0.8rem; line-height: 1.4;">
+                                    启用后，系统会自动调用浏览器保活来更新失效的账号
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <!-- 说明信息 -->
+                    <div style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%); border-left: 3px solid var(--primary-color); border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary-color);">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <strong style="color: var(--text-primary); font-size: 0.9rem;">功能说明</strong>
+                        </div>
+                        <ul style="margin: 0; padding-left: 1.2rem; color: var(--text-secondary); font-size: 0.85rem; line-height: 1.6;">
+                            <li>系统会按设定间隔自动检查所有账号的 Cookie 状态</li>
+                            <li>检测到无效 Cookie 时，会自动调用浏览器保活来更新</li>
+                            <li>只有失效的账号会被更新，有效的账号不会处理</li>
+                            <li>所有操作都会记录在日志中，可在保活页面查看</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="form-actions" style="display: flex; gap: 0.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                        <button type="button" class="btn-secondary" onclick="closeAutoCheckModal()" style="flex: 1; padding: 0.6rem;">取消</button>
+                        <button type="button" class="btn-secondary" onclick="executeAutoCheckNow()" style="flex: 1; padding: 0.6rem;">立即执行</button>
+                        <button type="submit" class="btn-primary" style="flex: 1; padding: 0.6rem;">保存配置</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 保活策略模态框 -->
+    <div id="keepAliveModal" class="modal">
+        <div class="modal-content" style="max-width: 1400px; width: 95vw; height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    保活策略
+                </h2>
+                <button class="modal-close" onclick="closeKeepAliveModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: hidden; padding: 0;">
+                <iframe id="keepAliveIframe" src="/static/keepalive.html" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/static/index.html';
+        }
+
+        let accounts = [];
+        let editingIndex = null;
+
+        // 表格点击事件处理（事件委托）
+        function handleTableClick(e) {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+
+            const index = parseInt(btn.getAttribute('data-index'));
+            if (isNaN(index)) {
+                console.warn('无法获取账号索引:', btn);
+                return;
+            }
+
+            console.log('按钮点击:', btn.className, '索引:', index);
+
+            if (btn.classList.contains('copy-btn')) {
+                e.preventDefault();
+                e.stopPropagation();
+                copyAccountConfig(index);
+            } else if (btn.classList.contains('test-btn')) {
+                testAccount(index);
+            } else if (btn.classList.contains('edit-btn')) {
+                editAccount(index);
+            } else if (btn.classList.contains('delete-btn')) {
+                deleteAccount(index);
+            }
+        }
+
+        // 加载账号列表
+        async function loadAccounts() {
+            try {
+                const response = await fetch('/admin/accounts', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('加载账号失败');
+                }
+
+                accounts = await response.json();
+                
+                // 调试：打印第一个账号的数据
+                if (accounts.length > 0) {
+                    console.log('账号数据示例:', {
+                        name: accounts[0].name,
+                        cookie_status: accounts[0].cookie_status,
+                        last_check_at: accounts[0].last_check_at,
+                        expires_at: accounts[0].expires_at
+                    });
+                }
+                
+                renderAccounts();
+            } catch (error) {
+                console.error('加载账号失败:', error);
+                document.getElementById('accountsTableBody').innerHTML = 
+                    '<tr><td colspan="7" class="loading">加载失败，请刷新重试</td></tr>';
+            }
+        }
+
+        // 渲染账号列表
+        function renderAccounts() {
+            const tbody = document.getElementById('accountsTableBody');
+                if (accounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="loading">暂无账号，请添加</td></tr>';
+                updateBulkButtons();
+                return;
+            }
+
+            tbody.innerHTML = accounts.map(acc => {
+                // Cookie 状态显示
+                let cookieStatusClass = 'status-unknown';
+                let cookieStatusText = '未检查';
+                if (acc.cookie_status === 'valid') {
+                    cookieStatusClass = 'status-available';
+                    cookieStatusText = '有效';
+                } else if (acc.cookie_status === 'expired') {
+                    cookieStatusClass = 'status-unavailable';
+                    cookieStatusText = '已过期';
+                } else if (acc.cookie_status === 'forbidden') {
+                    cookieStatusClass = 'status-unavailable';
+                    cookieStatusText = '被禁止';
+                } else if (acc.cookie_status === 'rate_limited') {
+                    cookieStatusClass = 'status-unknown';
+                    cookieStatusText = '限流';
+                }
+                
+                // 最后检查时间
+                let lastCheckText = '-';
+                if (acc.last_check_at) {
+                    try {
+                        const checkDate = new Date(acc.last_check_at);
+                        if (!isNaN(checkDate.getTime())) {
+                            lastCheckText = checkDate.toLocaleString('zh-CN', { 
+                                timeZone: 'Asia/Shanghai',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        } else {
+                            console.warn('无效的日期格式:', acc.last_check_at, '账号:', acc.name);
+                        }
+                    } catch (e) {
+                        console.error('解析日期失败:', e, '账号:', acc.name, 'last_check_at:', acc.last_check_at);
+                    }
+                }
+                
+                // 过期时间（开发中）
+                const expiresText = '开发中';
+
+                return `
+                    <tr>
+                        <td style="text-align: center;">
+                            ${acc.index > 0 ? `<input type="checkbox" class="account-checkbox" data-index="${acc.index}">` : ''}
+                        </td>
+                        <td>${acc.index === 0 ? '默认' : acc.index}</td>
+                        <td>${acc.name}</td>
+                        <td style="text-align: center;">
+                            <span class="status-badge ${cookieStatusClass}" title="${acc.error_message || ''}">${cookieStatusText}</span>
+                        </td>
+                        <td style="text-align: center; font-size: 0.875rem; color: var(--text-secondary);">${lastCheckText}</td>
+                        <td style="text-align: center; font-size: 0.875rem; color: var(--text-secondary);">${expiresText}</td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn-secondary copy-btn" data-index="${acc.index}" style="margin-right: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem;" title="复制配置">复制</button>
+                            <button class="btn-secondary test-btn" data-index="${acc.index}" style="margin-right: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem;">检查</button>
+                            <button class="btn-secondary edit-btn" data-index="${acc.index}" style="margin-right: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem;">编辑</button>
+                            ${acc.index > 0 ? `<button class="btn-danger delete-btn" data-index="${acc.index}" style="padding: 0.5rem 0.75rem; font-size: 0.875rem;">删除</button>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            // 更新批量操作按钮状态
+            updateBulkButtons();
+            
+            // 更新批量操作按钮状态
+            updateBulkButtons();
+            
+            // 重置全选复选框
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
+
+        // 添加账号
+        const addAccountBtn = document.getElementById('addAccountBtn');
+        if (addAccountBtn) {
+            addAccountBtn.addEventListener('click', () => {
+                editingIndex = null;
+                document.getElementById('modalTitle').textContent = '添加账号';
+                document.getElementById('accountForm').reset();
+                document.getElementById('accountModal').style.display = 'flex';
+                document.getElementById('accountModal').classList.add('active');
+            });
+        }
+
+        // 批量添加账号
+        const bulkAddAccountBtn = document.getElementById('bulkAddAccountBtn');
+        if (bulkAddAccountBtn) {
+            bulkAddAccountBtn.addEventListener('click', () => {
+                document.getElementById('bulkAccountData').value = '';
+                document.getElementById('bulkAccountModal').style.display = 'flex';
+                document.getElementById('bulkAccountModal').classList.add('active');
+            });
+        }
+
+        // 编辑账号
+        function editAccount(index) {
+            const account = accounts.find(acc => acc.index === index);
+            if (!account) return;
+
+            editingIndex = index;
+            document.getElementById('modalTitle').textContent = '编辑账号';
+            document.getElementById('accountName').value = account.name;
+            document.getElementById('secureCSES').value = account.secure_c_ses;
+            document.getElementById('csesidx').value = account.csesidx;
+            document.getElementById('configId').value = account.config_id;
+            document.getElementById('hostCOSES').value = account.host_c_oses || '';
+            document.getElementById('accountModal').style.display = 'flex';
+            document.getElementById('accountModal').classList.add('active');
+        }
+
+        // 删除账号
+        async function deleteAccount(index) {
+            if (!confirm(`确定要删除账号索引 ${index} 吗？此操作不可恢复。`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/accounts/${index}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '删除失败');
+                }
+
+                alert('账号已删除，配置已自动重新加载，无需重启服务。');
+                loadAccounts();
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // 测试账号（API 保活检查）
+        async function testAccount(index) {
+            const account = accounts.find(acc => acc.index === index);
+            if (!account) return;
+            
+            // 显示检查中状态
+            const testBtn = document.querySelector(`.test-btn[data-index="${index}"]`);
+            if (testBtn) {
+                testBtn.disabled = true;
+                testBtn.textContent = '检查中...';
+            }
+            
+            try {
+                const response = await fetch(`/admin/accounts/${index}/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+
+                const result = await response.json();
+                
+                // 更新账号信息
+                if (account) {
+                    account.cookie_status = result.cookie_status;
+                    account.last_check_at = result.last_check_at;
+                    account.expires_at = result.expires_at;
+                    account.error_message = result.error_message;
+                }
+                
+                // 重新渲染以更新显示
+                renderAccounts();
+                
+                // 显示结果
+                if (result.status === 'success') {
+                    alert(`✅ ${result.message}\nCookie 状态: ${result.cookie_status === 'valid' ? '有效' : '未知'}\n检查时间: ${new Date(result.last_check_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`);
+                } else {
+                    alert(`❌ ${result.message}\nCookie 状态: ${result.cookie_status === 'expired' ? '已过期' : result.cookie_status === 'forbidden' ? '被禁止' : '未知'}\n错误: ${result.error_message || '无'}`);
+                }
+            } catch (error) {
+                alert('检查失败: ' + error.message);
+            } finally {
+                if (testBtn) {
+                    testBtn.disabled = false;
+                    testBtn.textContent = '检查';
+                }
+            }
+        }
+        
+        // 批量检查所有账号
+        async function batchCheckAccounts() {
+            if (!confirm('确定要批量检查所有账号的 Cookie 状态吗？这可能需要一些时间。')) {
+                return;
+            }
+            
+            const bulkCheckBtn = document.getElementById('bulkCheckBtn');
+            if (bulkCheckBtn) {
+                bulkCheckBtn.disabled = true;
+                bulkCheckBtn.textContent = '检查中...';
+            }
+            
+            try {
+                const response = await fetch('/admin/accounts/batch-check', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('批量检查失败');
+                }
+
+                const result = await response.json();
+                
+                // 更新所有账号的状态
+                result.results.forEach(checkResult => {
+                    const account = accounts.find(acc => acc.index === checkResult.index);
+                    if (account) {
+                        account.cookie_status = checkResult.cookie_status;
+                        account.last_check_at = checkResult.last_check_at;
+                        account.expires_at = checkResult.expires_at;
+                        account.error_message = checkResult.error_message;
+                    }
+                });
+                
+                // 重新渲染
+                renderAccounts();
+                
+                // 统计结果
+                const validCount = result.results.filter(r => r.cookie_status === 'valid').length;
+                const expiredCount = result.results.filter(r => r.cookie_status === 'expired').length;
+                const totalCount = result.results.length;
+                
+                alert(`批量检查完成！\n总计: ${totalCount} 个账号\n有效: ${validCount} 个\n过期: ${expiredCount} 个\n其他: ${totalCount - validCount - expiredCount} 个`);
+            } catch (error) {
+                alert('批量检查失败: ' + error.message);
+            } finally {
+                if (bulkCheckBtn) {
+                    bulkCheckBtn.disabled = false;
+                    bulkCheckBtn.textContent = '批量检查';
+                }
+            }
+        }
+
+        // 提交表单
+        const accountForm = document.getElementById('accountForm');
+        if (accountForm) {
+            accountForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                name: document.getElementById('accountName').value,
+                secure_c_ses: document.getElementById('secureCSES').value,
+                csesidx: document.getElementById('csesidx').value,
+                config_id: document.getElementById('configId').value,
+                host_c_oses: document.getElementById('hostCOSES').value
+            };
+
+            try {
+                let response;
+                if (editingIndex === null) {
+                    // 创建
+                    response = await fetch('/admin/accounts', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                } else {
+                    // 更新
+                    response = await fetch(`/admin/accounts/${editingIndex}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                }
+
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '保存失败');
+                }
+
+                alert('账号已保存，配置已自动重新加载，无需重启服务。');
+                closeAccountModal();
+                loadAccounts();
+            } catch (error) {
+                alert('保存失败: ' + error.message);
+            }
+            });
+        }
+
+        // 关闭模态框
+        function closeAccountModal() {
+            const modal = document.getElementById('accountModal');
+            modal.style.display = 'none';
+            modal.classList.remove('active');
+            editingIndex = null;
+        }
+
+        // 关闭批量添加模态框
+        function closeBulkAccountModal() {
+            const modal = document.getElementById('bulkAccountModal');
+            modal.style.display = 'none';
+            modal.classList.remove('active');
+        }
+
+        // 批量添加账号表单提交
+        const bulkAccountForm = document.getElementById('bulkAccountForm');
+        if (bulkAccountForm) {
+            bulkAccountForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const bulkData = document.getElementById('bulkAccountData').value.trim();
+                if (!bulkData) {
+                    alert('请输入账号数据');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/admin/accounts/bulk', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ text: bulkData })
+                    });
+
+                    if (response.status === 401) {
+                        localStorage.removeItem('token');
+                        window.location.href = '/static/index.html';
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || '批量添加失败');
+                    }
+
+                    const result = await response.json();
+                    let message = `成功创建 ${result.created_count} 个账号`;
+                    if (result.skipped_count > 0) {
+                        message += `\n跳过 ${result.skipped_count} 个重复账号：\n`;
+                        result.skipped.forEach((item, index) => {
+                            if (index < 5) {  // 最多显示5个
+                                message += `  - ${item.name}: ${item.reason}\n`;
+                            }
+                        });
+                        if (result.skipped_count > 5) {
+                            message += `  ... 还有 ${result.skipped_count - 5} 个`;
+                        }
+                    }
+                    alert(message + '\n\n配置已自动重新加载，无需重启服务。');
+                    closeBulkAccountModal();
+                    loadAccounts();
+                } catch (error) {
+                    alert('批量添加失败: ' + error.message);
+                }
+            });
+        }
+
+        // 退出登录
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                localStorage.removeItem('token');
+                window.location.href = '/static/index.html';
+            });
+        }
+
+        // 点击模态框外部关闭
+        const accountModal = document.getElementById('accountModal');
+        if (accountModal) {
+            accountModal.addEventListener('click', (e) => {
+                if (e.target.id === 'accountModal') {
+                    closeAccountModal();
+                }
+            });
+        }
+
+        const bulkAccountModal = document.getElementById('bulkAccountModal');
+        if (bulkAccountModal) {
+            bulkAccountModal.addEventListener('click', (e) => {
+                if (e.target.id === 'bulkAccountModal') {
+                    closeBulkAccountModal();
+                }
+            });
+        }
+
+        // 复制账号配置
+        function copyAccountConfig(index) {
+            console.log('复制账号配置，索引:', index);
+            const account = accounts.find(acc => acc.index === index);
+            if (!account) {
+                console.error('未找到账号，索引:', index);
+                alert('未找到账号信息');
+                return;
+            }
+            
+            console.log('账号信息:', account);
+            
+            // 生成配置文本（.env格式）
+            const configText = `# Account ${account.index}: ${account.name}@${account.index}
+ACCOUNT${account.index}_NAME="${account.name}"
+ACCOUNT${account.index}_SECURE_C_SES="${account.secure_c_ses || ''}"
+ACCOUNT${account.index}_CSESIDX="${account.csesidx || ''}"
+ACCOUNT${account.index}_CONFIG_ID="${account.config_id || ''}"
+${account.host_c_oses ? `ACCOUNT${account.index}_HOST_C_OSES="${account.host_c_oses}"` : ''}`;
+            
+            console.log('生成的配置文本:', configText);
+            
+            // 复制到剪贴板
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(configText).then(() => {
+                    alert('账号配置已复制到剪贴板');
+                }).catch(err => {
+                    console.error('Clipboard API 失败:', err);
+                    // 如果clipboard API失败，使用传统方法
+                    fallbackCopyTextToClipboard(configText);
+                });
+            } else {
+                // 浏览器不支持 Clipboard API，使用传统方法
+                fallbackCopyTextToClipboard(configText);
+            }
+        }
+        
+        // 批量复制账号配置
+        function bulkCopyAccountConfigs() {
+            const checkboxes = document.querySelectorAll('.account-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请选择要复制的账号');
+                return;
+            }
+            
+            const indices = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-index')));
+            const configTexts = [];
+            
+            for (const index of indices) {
+                const account = accounts.find(acc => acc.index === index);
+                if (!account) continue;
+                
+                // 生成单个账号配置文本
+                const configText = `# Account ${account.index}: ${account.name}@${account.index}
+ACCOUNT${account.index}_NAME="${account.name}"
+ACCOUNT${account.index}_SECURE_C_SES="${account.secure_c_ses || ''}"
+ACCOUNT${account.index}_CSESIDX="${account.csesidx || ''}"
+ACCOUNT${account.index}_CONFIG_ID="${account.config_id || ''}"
+${account.host_c_oses ? `ACCOUNT${account.index}_HOST_C_OSES="${account.host_c_oses}"` : ''}`;
+                
+                configTexts.push(configText);
+            }
+            
+            // 合并所有配置，用空行分隔
+            const combinedText = configTexts.join('\n\n');
+            
+            console.log('批量复制配置文本:', combinedText);
+            
+            // 复制到剪贴板
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(combinedText).then(() => {
+                    alert(`已复制 ${indices.length} 个账号配置到剪贴板`);
+                }).catch(err => {
+                    console.error('Clipboard API 失败:', err);
+                    fallbackCopyTextToClipboard(combinedText, indices.length);
+                });
+            } else {
+                fallbackCopyTextToClipboard(combinedText, indices.length);
+            }
+        }
+        
+        // 备用复制方法
+        function fallbackCopyTextToClipboard(text, count = 1) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.left = '-999999px';
+            textarea.style.top = '-999999px';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    if (count > 1) {
+                        alert(`已复制 ${count} 个账号配置到剪贴板`);
+                    } else {
+                        alert('账号配置已复制到剪贴板');
+                    }
+                } else {
+                    alert('复制失败，请手动复制');
+                }
+            } catch (err) {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动复制');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // 更新批量操作按钮的启用/禁用状态
+        function updateBulkButtons() {
+            const checkboxes = document.querySelectorAll('.account-checkbox:checked');
+            const checkedCount = checkboxes.length;
+            
+            const bulkCopyBtn = document.getElementById('bulkCopyBtn');
+            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+            
+            if (bulkCopyBtn) {
+                bulkCopyBtn.disabled = checkedCount === 0;
+            }
+            if (bulkDeleteBtn) {
+                bulkDeleteBtn.disabled = checkedCount === 0;
+            }
+        }
+
+        // 全选/取消全选
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                const checkboxes = document.querySelectorAll('.account-checkbox');
+                checkboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
+                updateBulkButtons();
+            });
+        }
+
+        // 批量复制账号
+        const bulkCopyBtn = document.getElementById('bulkCopyBtn');
+        if (bulkCopyBtn) {
+            bulkCopyBtn.addEventListener('click', () => {
+                bulkCopyAccountConfigs();
+            });
+        }
+
+        // 监听单个复选框的变化
+        document.addEventListener('change', (e) => {
+            if (e.target.classList.contains('account-checkbox')) {
+                updateBulkButtons();
+                // 更新全选复选框状态
+                const checkboxes = document.querySelectorAll('.account-checkbox');
+                const checkedCount = document.querySelectorAll('.account-checkbox:checked').length;
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+                    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+                }
+            }
+        });
+
+        // 批量删除账号
+        const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+        if (bulkDeleteBtn) {
+            bulkDeleteBtn.addEventListener('click', async () => {
+                const checkboxes = document.querySelectorAll('.account-checkbox:checked');
+                if (checkboxes.length === 0) {
+                    alert('请选择要删除的账号');
+                    return;
+                }
+                
+                const indices = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-index')));
+                const accountNames = indices.map(idx => {
+                    const acc = accounts.find(a => a.index === idx);
+                    return acc ? acc.name : `索引${idx}`;
+                }).join('、');
+                
+                if (!confirm(`确定要删除以下 ${indices.length} 个账号吗？\n${accountNames}\n\n此操作不可恢复。`)) {
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/admin/accounts/bulk-delete', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ indices })
+                    });
+                    
+                    if (response.status === 401) {
+                        localStorage.removeItem('token');
+                        window.location.href = '/static/index.html';
+                        return;
+                    }
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || '批量删除失败');
+                    }
+                    
+                    const result = await response.json();
+                    alert(`成功删除 ${result.deleted_count} 个账号\n\n配置已自动重新加载，无需重启服务。`);
+                    
+                    // 取消全选
+                    if (selectAllCheckbox) {
+                        selectAllCheckbox.checked = false;
+                    }
+                    
+                    loadAccounts();
+                } catch (error) {
+                    alert('批量删除失败: ' + error.message);
+                }
+            });
+        }
+
+        // 初始化：绑定表格事件委托
+        const tbody = document.getElementById('accountsTableBody');
+        if (tbody) {
+            tbody.addEventListener('click', handleTableClick);
+        }
+
+        // 初始化：加载账号列表
+        loadAccounts();
+        
+        // 自动刷新账号列表（每10秒刷新一次，以便显示自动检查和API保活的结果）
+        setInterval(() => {
+            loadAccounts();
+        }, 10000);  // 10秒刷新一次
+
+        // ========== 保活策略管理 ==========
+        document.getElementById('keepAliveBtn').addEventListener('click', () => {
+            document.getElementById('keepAliveModal').classList.add('active');
+        });
+
+        window.closeKeepAliveModal = function() {
+            document.getElementById('keepAliveModal').classList.remove('active');
+        };
+        
+        // 点击模态框外部关闭
+        document.getElementById('keepAliveModal').addEventListener('click', (e) => {
+            if (e.target.id === 'keepAliveModal') {
+                closeKeepAliveModal();
+            }
+        });
+        
+        // ========== 自动检查管理 ==========
+        window.openAutoCheckModal = async function() {
+            const modal = document.getElementById('autoCheckModal');
+            if (!modal) return;
+            
+            try {
+                // 获取当前配置
+                const response = await fetch('/admin/keep-alive/task', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+                
+                const task = await response.json();
+                
+                // 填充表单
+                document.getElementById('autoCheckEnabled').checked = task.auto_check_enabled || false;
+                document.getElementById('autoCheckInterval').value = task.auto_check_interval || 60;
+                document.getElementById('autoCheckAutoFix').checked = task.auto_check_auto_fix !== false;
+                
+                modal.classList.add('active');
+            } catch (error) {
+                alert('加载配置失败: ' + error.message);
+            }
+        }
+        
+        window.closeAutoCheckModal = function() {
+            const modal = document.getElementById('autoCheckModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+        
+        window.toggleAutoCheckFields = function() {
+            // 不再需要显示/隐藏字段，所有配置项默认显示
+        }
+        
+        window.executeAutoCheckNow = async function() {
+            if (!confirm('确定要立即执行自动检查吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/auto-check/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '执行失败');
+                }
+                
+                const result = await response.json();
+                alert('✅ ' + result.message);
+            } catch (error) {
+                alert('执行失败: ' + error.message);
+            }
+        }
+        
+        // 自动检查表单提交
+        const autoCheckForm = document.getElementById('autoCheckForm');
+        if (autoCheckForm) {
+            autoCheckForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const formData = {
+                    is_enabled: true,  // 保持原有配置
+                    schedule_time: "00:00",  // 保持原有配置
+                    api_keepalive_enabled: true,  // 保持原有配置
+                    api_keepalive_interval: 30,  // 保持原有配置
+                    auto_check_enabled: document.getElementById('autoCheckEnabled').checked,
+                    auto_check_interval: parseInt(document.getElementById('autoCheckInterval').value),
+                    auto_check_auto_fix: document.getElementById('autoCheckAutoFix').checked
+                };
+                
+                try {
+                    // 先获取当前配置，然后合并
+                    const currentResponse = await fetch('/admin/keep-alive/task', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (currentResponse.status === 401) {
+                        localStorage.removeItem('token');
+                        window.location.href = '/static/index.html';
+                        return;
+                    }
+                    
+                    const currentTask = await currentResponse.json();
+                    formData.is_enabled = currentTask.is_enabled;
+                    formData.schedule_time = currentTask.schedule_time;
+                    formData.api_keepalive_enabled = currentTask.api_keepalive_enabled;
+                    formData.api_keepalive_interval = currentTask.api_keepalive_interval;
+                    
+                    const response = await fetch('/admin/keep-alive/task', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    if (response.status === 401) {
+                        localStorage.removeItem('token');
+                        window.location.href = '/static/index.html';
+                        return;
+                    }
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || '保存失败');
+                    }
+                    
+                    alert('✅ 配置已保存');
+                    closeAutoCheckModal();
+                } catch (error) {
+                    alert('保存失败: ' + error.message);
+                }
+            });
+        }
+        
+        // 点击模态框外部关闭
+        const autoCheckModal = document.getElementById('autoCheckModal');
+        if (autoCheckModal) {
+            autoCheckModal.addEventListener('click', (e) => {
+                if (e.target.id === 'autoCheckModal') {
+                    closeAutoCheckModal();
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>
+

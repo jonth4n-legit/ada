@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+
+# Data
+data/
+
+# Node.js files (no longer needed - registration is pure Go)
+node_modules/
+package-lock.json
+package.json
+main.js
+
+# IDE
+.idea/
+.vscode/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Documentation
+README.md
+LICENSE
+
+# GitHub
+.github/
+
+
+
+
+
+
+
+

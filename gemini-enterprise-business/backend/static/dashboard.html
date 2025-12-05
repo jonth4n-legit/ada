@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Keys Management - Gemini Ultra Gateway</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/js/i18n.js"></script>
+    <style>
+        .account-form {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-group input {
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 1rem;
+        }
+        
+        .language-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-small {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h1>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                    <span data-i18n="api_keys">API Keys Management</span>
+                </h1>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <div class="language-toggle">
+                        <button onclick="I18n.toggleLanguage()" class="btn-small" title="Switch Language">EN/中</button>
+                    </div>
+                    <a href="/static/chat.html" class="btn-secondary" data-i18n="chat">Chat</a>
+                    <a href="/static/accounts.html" class="btn-secondary" data-i18n="accounts">Accounts</a>
+                    <button id="keepAliveBtn" class="btn-secondary" data-i18n="keep_alive">Keep Alive</button>
+                    <button id="accountSettingsBtn" class="btn-secondary" data-i18n="settings">Settings</button>
+                    <button id="logoutBtn" class="btn-secondary" data-i18n="logout">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-main">
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label" data-i18n="active_api_keys">Active Keys</div>
+                        <div class="stat-value" id="activeKeys">-</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label" data-i18n="total_requests">Total Requests</div>
+                        <div class="stat-value" id="totalUsage">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generate Key Form -->
+            <div class="card">
+                <h2 data-i18n="create_api_key">Generate New Key</h2>
+                <form id="generateForm" class="generate-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="count">Count</label>
+                            <input type="number" id="count" name="count" min="1" max="100" value="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="expiresDays">Expires (days)</label>
+                            <input type="number" id="expiresDays" name="expiresDays" min="1" max="3650" value="30" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="namePrefix" data-i18n="key_name">Name Prefix</label>
+                            <input type="text" id="namePrefix" name="namePrefix" value="API Key" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary" data-i18n="create">Generate Key</button>
+                </form>
+            </div>
+
+            <!-- Keys List -->
+            <div class="card">
+                <div class="card-header-with-actions">
+                    <h2 data-i18n="api_keys">Keys List</h2>
+                    <div>
+                        <button id="batchCopyBtn" class="btn-secondary" style="display: none; margin-right: 8px;" onclick="batchCopyKeys()">
+                            Batch Copy
+                        </button>
+                        <button id="batchDeleteBtn" class="btn-danger" style="display: none;" onclick="batchDeleteKeys()">
+                            Batch Delete
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="keysTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                                </th>
+                                <th>ID</th>
+                                <th data-i18n="created_at">Created</th>
+                                <th data-i18n="expires_at">Expires</th>
+                                <th>Status</th>
+                                <th>Usage</th>
+                                <th data-i18n="last_used">Last Used</th>
+                                <th style="width: 200px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keysTableBody">
+                            <tr>
+                                <td colspan="8" class="loading" data-i18n="loading">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Generated Keys Modal -->
+    <div id="keysModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813a2 2 0 0 0 1.272 1.272L21 12l-5.813 1.912a2 2 0 0 0-1.272 1.272L12 21l-1.912-5.813a2 2 0 0 0-1.272-1.272L3 12l5.813-1.912a2 2 0 0 0 1.272-1.272L12 3z"></path></svg>
+                    <span data-i18n="success">Keys Generated Successfully</span>
+                </h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="info-message">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    <span data-i18n="key_warning">Keys generated. You can view them anytime from the keys list.</span>
+                </p>
+                <div id="generatedKeys" class="keys-list"></div>
+                <button class="btn-primary" onclick="copyAllKeys()">Copy All Keys</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logsModal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    <span id="logsModalTitle" data-i18n="api_logs">Call Details</span>
+                </h2>
+                <button class="modal-close" onclick="closeLogsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Stats Cards -->
+                <div class="stats-grid-small">
+                    <div class="stat-card-small">
+                        <div class="stat-label">Total Calls</div>
+                        <div class="stat-value-small" id="statTotalCalls">-</div>
+                    </div>
+                    <div class="stat-card-small">
+                        <div class="stat-label">Success Rate</div>
+                        <div class="stat-value-small" id="statSuccessRate">-</div>
+                    </div>
+                    <div class="stat-card-small">
+                        <div class="stat-label">Avg Response</div>
+                        <div class="stat-value-small" id="statAvgResponse">-</div>
+                    </div>
+                    <div class="stat-card-small">
+                        <div class="stat-label">Errors</div>
+                        <div class="stat-value-small" id="statErrorCalls">-</div>
+                    </div>
+                </div>
+
+                <!-- Model Stats -->
+                <div class="section-title">Stats by Model</div>
+                <div id="modelStatsContainer" class="model-stats-container"></div>
+
+                <!-- Daily Trend -->
+                <div class="section-title">Last 7 Days Trend</div>
+                <div id="dailyStatsChart" class="chart-container"></div>
+
+                <!-- Call Logs -->
+                <div class="section-title" data-i18n="logs">Call Logs</div>
+                <div class="table-container">
+                    <table id="logsTable">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th data-i18n="model">Model</th>
+                                <th>Status</th>
+                                <th>Response Time</th>
+                                <th>IP</th>
+                                <th data-i18n="endpoint">Endpoint</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr>
+                                <td colspan="6" class="loading" data-i18n="loading">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div id="logsPagination" class="pagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Settings Modal -->
+    <div id="accountSettingsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; width: 90%;">
+            <div class="modal-header">
+                <h2 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    <span data-i18n="account_settings">Account Settings</span>
+                </h2>
+                <button class="modal-close" onclick="closeAccountSettingsModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <iframe id="accountSettingsIframe" src="/static/accountsettings.html" style="width: 100%; min-height: 450px; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keep Alive Modal -->
+    <div id="keepAliveModal" class="modal">
+        <div class="modal-content" style="max-width: 1400px; width: 95vw; height: 90vh; display: flex; flex-direction: column;">
+            <div class="modal-header">
+                <h2 style="display: flex; align-items: center; gap: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span data-i18n="keep_alive">Keep Alive Tasks</span>
+                </h2>
+                <button class="modal-close" onclick="closeKeepAliveModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="flex: 1; overflow: hidden; padding: 0;">
+                <iframe id="keepAliveIframe" src="/static/keepalive.html" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        // Account Settings
+        document.getElementById('accountSettingsBtn').addEventListener('click', () => {
+            document.getElementById('accountSettingsModal').classList.add('active');
+        });
+
+        window.closeAccountSettingsModal = function() {
+            document.getElementById('accountSettingsModal').classList.remove('active');
+        };
+
+        // Listen for iframe messages
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'closeAccountSettingsModal') {
+                closeAccountSettingsModal();
+            }
+        });
+
+        // Click outside to close
+        document.getElementById('accountSettingsModal').addEventListener('click', (e) => {
+            if (e.target.id === 'accountSettingsModal') {
+                closeAccountSettingsModal();
+            }
+        });
+
+        // Keep Alive Management
+        document.getElementById('keepAliveBtn').addEventListener('click', () => {
+            document.getElementById('keepAliveModal').classList.add('active');
+        });
+
+        window.closeKeepAliveModal = function() {
+            document.getElementById('keepAliveModal').classList.remove('active');
+        };
+        
+        // Click outside to close
+        document.getElementById('keepAliveModal').addEventListener('click', (e) => {
+            if (e.target.id === 'keepAliveModal') {
+                closeKeepAliveModal();
+            }
+        });
+    </script>
+</body>
+
+</html>

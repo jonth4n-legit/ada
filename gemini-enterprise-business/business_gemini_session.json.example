@@ -1,0 +1,24 @@
+{
+    "proxy": "http://127.0.0.1:7890",
+    "proxy_enabled": false,
+	"image_base_url": "http://127.0.0.1:8000/",
+	"image_output_mode": "url",
+    "log_level": "INFO",
+    "admin_password_hash": "",
+    "admin_secret_key": "",
+    "api_tokens": [
+        "please_set_api_token_here"
+    ],
+    "accounts": [
+    ],
+    "models": [
+        {
+            "id": "gemini-3-pro-preview",
+            "name": "gemini-3-pro-preview",
+            "description": "gemini-3-pro-preview 模型",
+            "context_length": 32768,
+            "max_tokens": 8192,
+            "price_per_1k_tokens": 0.0015
+        }
+    ]
+}

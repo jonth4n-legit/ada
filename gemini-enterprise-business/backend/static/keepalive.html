@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="keep_alive">Keep Alive</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .keep-alive-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+            overflow: hidden;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status-available {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-unavailable {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .status-unknown {
+            background-color: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+        }
+
+        .status-running {
+            background-color: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="keep-alive-container">
+        <div style="flex: 1; overflow: hidden; display: flex; gap: 1rem;">
+            <!-- Left: Configuration Area -->
+            <div style="flex: 0 0 50%; min-width: 0; display: flex; flex-direction: column; overflow-y: auto;">
+                <div id="keepAliveContent" style="padding: 0;">
+                    <div class="loading" data-i18n="loading">Loading...</div>
+                </div>
+            </div>
+            
+            <!-- Right: Log Details -->
+            <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1rem; border-left: 1px solid var(--border-color); padding-left: 1rem;">
+                <!-- Log Details Area -->
+                <div id="keepAliveAccountLogs" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                        <h3 style="margin: 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <span data-i18n="log_details">Log Details</span>
+                        </h3>
+                    </div>
+                    <div id="keepAliveAccountLogsContent" class="table-container" style="flex: 1; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md); min-height: 0;">
+                        <div style="color: var(--text-tertiary); text-align: center; padding: 2rem;" data-i18n="click_to_view_logs">Click "View Details" in execution history to view logs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/i18n.js"></script>
+    <script src="/static/app.js"></script>
+    <script>
+        // ========== Keep Alive Strategy Management ==========
+        let keepAliveModalOpen = true; // Always true in iframe
+        let currentLogId = null; // Currently displayed log ID
+        let expandedAccounts = new Set(); // Expanded account details
+        
+        // 通知父窗口模态框已打开
+        function notifyParentModalOpen() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'keepAliveModalOpen' }, '*');
+            }
+        }
+        
+        // 通知父窗口模态框已关闭
+        function notifyParentModalClose() {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'keepAliveModalClose' }, '*');
+            }
+        }
+        
+        function startKeepAliveAutoRefresh() {
+            // 只有在任务执行中时才自动刷新
+            if (window.keepAliveInterval) {
+                clearInterval(window.keepAliveInterval);
+            }
+            window.keepAliveInterval = setInterval(() => {
+                if (!keepAliveModalOpen) {
+                    clearInterval(window.keepAliveInterval);
+                    window.keepAliveInterval = null;
+                    return;
+                }
+                // 检查任务状态，如果还在运行就刷新
+                checkKeepAliveStatus().then(status => {
+                    if (status && status.is_running) {
+                        // 只更新状态和日志，不重新渲染整个内容
+                        updateKeepAliveStatusOnly();
+                        loadKeepAliveLogs(); // 更新执行历史
+                        // 如果当前显示的是正在执行的任务，刷新账号日志
+                        if (currentLogId) {
+                            loadAccountLogs(currentLogId, true);
+                        } else {
+                            // 如果没有显示任何日志，自动加载正在执行的任务
+                            autoLoadRunningLog();
+                        }
+                    } else {
+                        // 任务已完成，停止自动刷新
+                        clearInterval(window.keepAliveInterval);
+                        window.keepAliveInterval = null;
+                    }
+                });
+            }, 5000);
+        }
+        
+        function stopKeepAliveAutoRefresh() {
+            if (window.keepAliveInterval) {
+                clearInterval(window.keepAliveInterval);
+                window.keepAliveInterval = null;
+            }
+        }
+        
+        // 自动加载正在运行的任务日志
+        async function autoLoadRunningLog() {
+            try {
+                const response = await apiRequest('/admin/keep-alive/logs?page=1&page_size=1');
+                if (!response.ok) return;
+                
+                const logs = await response.json();
+                if (logs.length === 0) return;
+                
+                const latestLog = logs[0];
+                if (latestLog.status === 'running') {
+                    currentLogId = latestLog.id;
+                    loadAccountLogs(latestLog.id, true);
+                }
+            } catch (error) {
+                console.error('自动加载运行中日志失败:', error);
+            }
+        }
+
+        async function loadKeepAliveTask() {
+            try {
+                const response = await apiRequest('/admin/keep-alive/task');
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorDetail = '加载保活任务失败';
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorDetail = errorJson.detail || errorDetail;
+                    } catch (e) {
+                        errorDetail = errorText || errorDetail;
+                    }
+                    throw new Error(errorDetail);
+                }
+
+                const task = await response.json();
+                renderKeepAliveTask(task);
+            } catch (error) {
+                console.error('加载保活任务失败:', error);
+                const errorMsg = error.message || '加载失败，请刷新重试';
+                document.getElementById('keepAliveContent').innerHTML = 
+                    `<div class="error-message">${errorMsg}</div>`;
+            }
+        }
+
+        // 标记是否已经渲染过，避免重复渲染导致按钮闪烁
+        let keepAliveTaskRendered = false;
+
+        function renderKeepAliveTask(task) {
+            const content = document.getElementById('keepAliveContent');
+            const statusClass = task.last_status === 'success' ? 'status-available' : 
+                              task.last_status === 'error' ? 'status-unavailable' : 'status-unknown';
+            const statusText = task.last_status === 'success' ? I18n.t('success') : 
+                              task.last_status === 'error' ? I18n.t('failed') : 
+                              task.last_status === 'running' ? I18n.t('running') : I18n.t('never_executed');
+            
+            const lastRunText = task.last_run_at ? 
+                new Date(task.last_run_at).toLocaleString(I18n.getLanguage() === 'zh' ? 'zh-CN' : 'en-US', { timeZone: 'Asia/Shanghai' }) : 
+                I18n.t('never_executed');
+            
+            // 如果已经渲染过，只更新状态信息，不重新渲染整个内容
+            if (keepAliveTaskRendered) {
+                updateKeepAliveStatusOnly(task, statusClass, statusText, lastRunText);
+                return;
+            }
+            
+            keepAliveTaskRendered = true;
+            content.innerHTML = `
+                <div style="display: grid; gap: 1.25rem;">
+                    <!-- 任务状态卡片 -->
+                    <div style="display: flex; align-items: center; gap: 1rem; padding: 1.25rem; background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.6) 100%); border: 1px solid var(--border-color); border-radius: var(--radius-lg);">
+                        <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer; flex: 1;">
+                            <input type="checkbox" id="keepAliveEnabled" ${task.is_enabled ? 'checked' : ''} 
+                                onchange="toggleKeepAlive(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-weight: 600; font-size: 1rem;" data-i18n="enable_keep_alive">Enable Keep Alive Task</span>
+                        </label>
+                        <span class="status-badge ${statusClass}" style="margin-left: auto; font-size: 0.875rem; padding: 0.4rem 0.9rem;">${statusText}</span>
+                    </div>
+                    
+                    <!-- 配置区域 -->
+                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="keepAliveTime" style="margin-bottom: 0.5rem; font-weight: 500;" data-i18n="execution_time">Execution Time (Beijing Time)</label>
+                            <input type="time" id="keepAliveTime" value="${task.schedule_time}" 
+                                style="width: 100%; padding: 0.75rem; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: 1rem;">
+                        </div>
+                        
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button class="btn-primary" onclick="saveKeepAliveTask()" style="padding: 0.75rem 1.5rem;" data-i18n="save_settings">Save Settings</button>
+                            <button class="btn-secondary" onclick="executeKeepAliveNow()" style="padding: 0.75rem 1.5rem;" data-i18n="execute_now">Execute Now</button>
+                            <button id="cancelKeepAliveBtn" class="btn-secondary" onclick="cancelKeepAliveTask()" style="display: none; padding: 0.75rem 1.5rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" data-i18n="cancel_task">Cancel Task</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Last Execution Info -->
+                    <div style="padding: 1rem 1.25rem; background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                        <div style="display: grid; gap: 0.75rem; font-size: 0.9rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <span style="color: var(--text-secondary); font-weight: 500;">${I18n.t('last_execution_time')}:</span>
+                                <span class="last-run-time" style="color: var(--text-primary);">${lastRunText}</span>
+                            </div>
+                            ${task.last_message ? `<div style="display: flex; gap: 0.5rem; align-items: start;">
+                                <span style="color: var(--text-secondary); font-weight: 500; flex-shrink: 0;">${I18n.t('last_execution_result')}:</span>
+                                <span class="last-result" style="color: ${task.last_status === 'success' ? '#10b981' : task.last_status === 'error' ? '#ef4444' : 'var(--text-primary)'}; word-break: break-word; flex: 1;">${(task.last_message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')}</span>
+                            </div>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Execution History Table -->
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary);" data-i18n="execution_history">Execution History</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button id="bulkDeleteBtn" class="btn-secondary" onclick="bulkDeleteLogs()" style="display: none; font-size: 0.75rem; padding: 0.4rem 0.8rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);" data-i18n="bulk_delete">Bulk Delete</button>
+                            </div>
+                        </div>
+                        <div id="keepAliveLogs" class="table-container" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                            <div class="loading" data-i18n="loading">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            loadKeepAliveLogs();
+        }
+
+        // 只更新状态信息，不重新渲染整个内容
+        async function updateKeepAliveStatusOnly(task = null, statusClass = null, statusText = null, lastRunText = null) {
+            if (!task) {
+                try {
+                    const response = await apiRequest('/admin/keep-alive/task');
+                    if (response.ok) {
+                        task = await response.json();
+                    } else {
+                        return;
+                    }
+                } catch (error) {
+                    return;
+                }
+            }
+            
+            if (!statusClass) {
+                statusClass = task.last_status === 'success' ? 'status-available' : 
+                              task.last_status === 'error' ? 'status-unavailable' : 'status-unknown';
+            }
+            if (!statusText) {
+                statusText = task.last_status === 'success' ? '成功' : 
+                              task.last_status === 'error' ? '失败' : 
+                              task.last_status === 'running' ? '执行中' : '未执行';
+            }
+            if (!lastRunText) {
+                lastRunText = task.last_run_at ? 
+                    new Date(task.last_run_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : 
+                    '从未执行';
+            }
+            
+            // 只更新状态徽章
+            const statusBadge = document.querySelector('#keepAliveContent .status-badge');
+            if (statusBadge) {
+                statusBadge.className = `status-badge ${statusClass}`;
+                statusBadge.textContent = statusText;
+            }
+            
+            // 只更新上次执行信息
+            const lastRunSpan = document.querySelector('#keepAliveContent .last-run-time');
+            if (lastRunSpan) {
+                lastRunSpan.textContent = lastRunText;
+            }
+            
+            const lastResultSpan = document.querySelector('#keepAliveContent .last-result');
+            if (lastResultSpan && task.last_message) {
+                lastResultSpan.textContent = task.last_message;
+                lastResultSpan.style.color = task.last_status === 'success' ? '#10b981' : 
+                                             task.last_status === 'error' ? '#ef4444' : 
+                                             'var(--text-primary)';
+            }
+            
+            // 更新中断按钮显示状态
+            checkKeepAliveStatus();
+        }
+
+        async function toggleKeepAlive(enabled) {
+            try {
+                const response = await apiRequest('/admin/keep-alive/task');
+                const task = await response.json();
+                await saveKeepAliveTask(enabled);
+            } catch (error) {
+                console.error('获取任务配置失败:', error);
+            }
+        }
+
+        async function saveKeepAliveTask(enabled = null) {
+            try {
+                const isEnabled = enabled !== null ? enabled : document.getElementById('keepAliveEnabled').checked;
+                const scheduleTime = document.getElementById('keepAliveTime').value;
+                
+                const response = await apiRequest('/admin/keep-alive/task', {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        is_enabled: isEnabled,
+                        schedule_time: scheduleTime
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '保存失败');
+                }
+
+                alert('保活任务设置已保存');
+                // 保存后需要完全重新渲染，因为配置可能改变了
+                keepAliveTaskRendered = false;
+                loadKeepAliveTask();
+            } catch (error) {
+                alert('保存失败: ' + error.message);
+            }
+        }
+
+        async function executeKeepAliveNow() {
+            if (!confirm(I18n.t('confirm_execute'))) {
+                return;
+            }
+            
+            try {
+                const response = await apiRequest('/admin/keep-alive/execute', {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '执行失败');
+                }
+
+                alert(I18n.t('task_started'));
+                // 开始自动刷新
+                startKeepAliveAutoRefresh();
+                // 立即加载一次
+                setTimeout(() => {
+                    loadKeepAliveTask();
+                    autoLoadRunningLog();
+                }, 2000);
+            } catch (error) {
+                alert('执行失败: ' + error.message);
+            }
+        }
+
+        async function loadKeepAliveLogs() {
+            try {
+                const response = await apiRequest('/admin/keep-alive/logs?page=1&page_size=10');
+
+                if (!response.ok) {
+                    throw new Error('加载日志失败');
+                }
+
+                const logs = await response.json();
+                renderKeepAliveLogs(logs);
+                
+                // 检查是否有正在运行的任务，如果有则开始自动刷新并自动加载日志
+                const status = await checkKeepAliveStatus();
+                if (status && status.is_running) {
+                    startKeepAliveAutoRefresh();
+                    // 自动加载正在执行的任务日志
+                    if (!currentLogId) {
+                        autoLoadRunningLog();
+                    }
+                } else {
+                    stopKeepAliveAutoRefresh();
+                }
+            } catch (error) {
+                console.error('加载日志失败:', error);
+                document.getElementById('keepAliveLogs').innerHTML = 
+                    '<div class="error-message">加载失败</div>';
+            }
+        }
+
+        async function checkKeepAliveStatus() {
+            try {
+                const response = await apiRequest('/admin/keep-alive/status');
+                if (response.ok) {
+                    const status = await response.json();
+                    const cancelBtn = document.getElementById('cancelKeepAliveBtn');
+                    if (cancelBtn) {
+                        cancelBtn.style.display = status.is_running ? 'block' : 'none';
+                    }
+                    return status;
+                }
+            } catch (error) {
+                console.error('检查保活状态失败:', error);
+            }
+            return null;
+        }
+
+        async function cancelKeepAliveTask() {
+            if (!confirm(I18n.t('confirm_cancel'))) {
+                return;
+            }
+            
+            try {
+                const response = await apiRequest('/admin/keep-alive/cancel', {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '中断失败');
+                }
+
+                alert('保活任务已中断');
+                setTimeout(() => {
+                    loadKeepAliveTask();
+                }, 1000);
+            } catch (error) {
+                alert('中断失败: ' + error.message);
+            }
+        }
+
+        function renderKeepAliveLogs(logs) {
+            const container = document.getElementById('keepAliveLogs');
+            
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="loading">暂无执行日志</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table style="width: 100%; font-size: 0.875rem;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 0.5rem; width: 30px;">
+                                <input type="checkbox" id="selectAllLogs" onchange="toggleSelectAllLogs(this.checked)">
+                            </th>
+                            <th style="padding: 0.5rem;">执行时间</th>
+                            <th style="padding: 0.5rem;">状态</th>
+                            <th style="padding: 0.5rem;">账号数</th>
+                            <th style="padding: 0.5rem;">成功/失败</th>
+                            <th style="padding: 0.5rem;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logs.map(log => {
+                            const statusClass = log.status === 'success' ? 'status-available' : 
+                                              log.status === 'error' ? 'status-unavailable' : 
+                                              log.status === 'cancelled' ? 'status-unknown' : 'status-unknown';
+                            const statusText = log.status === 'success' ? '成功' : 
+                                              log.status === 'error' ? '失败' : 
+                                              log.status === 'cancelled' ? '中断' : '执行中';
+                            const startTime = new Date(log.started_at).toLocaleString('zh-CN', { 
+                                timeZone: 'Asia/Shanghai',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                            
+                            return `
+                                <tr>
+                                    <td style="padding: 0.5rem;">
+                                        <input type="checkbox" class="log-checkbox" value="${log.id}" onchange="updateBulkDeleteButton()">
+                                    </td>
+                                    <td style="padding: 0.5rem;">${startTime}</td>
+                                    <td style="padding: 0.5rem;"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                    <td style="padding: 0.5rem;">${log.accounts_count || '-'}</td>
+                                    <td style="padding: 0.5rem;">${log.success_count || 0}/${log.fail_count || 0}</td>
+                                    <td style="padding: 0.5rem;">
+                                        <div style="display: flex; gap: 0.25rem;">
+                                            <button class="btn-secondary" onclick="loadAccountLogs(${log.id})" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">查看详情</button>
+                                            <button class="btn-secondary" onclick="deleteLog(${log.id})" style="font-size: 0.75rem; padding: 0.25rem 0.5rem; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">删除</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function loadAccountLogs(logId, silent = false) {
+            const accountLogsContent = document.getElementById('keepAliveAccountLogsContent');
+            
+            if (!silent) {
+                currentLogId = logId;
+                accountLogsContent.innerHTML = '<div class="loading">加载中...</div>';
+            }
+            
+            try {
+                const response = await apiRequest(`/admin/keep-alive/logs/${logId}/accounts`);
+                
+                if (!response.ok) {
+                    throw new Error('加载账号日志失败');
+                }
+                
+                const accountLogs = await response.json();
+                renderAccountLogs(accountLogs, accountLogsContent, logId);
+            } catch (error) {
+                console.error('加载账号日志失败:', error);
+                if (!silent) {
+                    accountLogsContent.innerHTML = '<div class="error-message">加载失败</div>';
+                }
+            }
+        }
+        
+        function toggleSelectAllLogs(checked) {
+            const checkboxes = document.querySelectorAll('.log-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = checked;
+            });
+            updateBulkDeleteButton();
+        }
+        
+        function updateBulkDeleteButton() {
+            const checkboxes = document.querySelectorAll('.log-checkbox:checked');
+            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+            if (bulkDeleteBtn) {
+                bulkDeleteBtn.style.display = checkboxes.length > 0 ? 'block' : 'none';
+            }
+        }
+        
+        async function deleteLog(logId) {
+            if (!confirm(I18n.t('confirm_delete'))) {
+                return;
+            }
+            
+            try {
+                const response = await apiRequest(`/admin/keep-alive/logs/${logId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '删除失败');
+                }
+                
+                alert('日志已删除');
+                loadKeepAliveLogs();
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+        
+        async function bulkDeleteLogs() {
+            const checkboxes = document.querySelectorAll('.log-checkbox:checked');
+            const logIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            
+            if (logIds.length === 0) {
+                alert(I18n.t('select_logs_to_delete'));
+                return;
+            }
+            
+            if (!confirm(I18n.t('confirm_bulk_delete').replace('{count}', logIds.length))) {
+                return;
+            }
+            
+            try {
+                const response = await apiRequest('/admin/keep-alive/logs/bulk-delete', {
+                    method: 'POST',
+                    body: JSON.stringify(logIds)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '批量删除失败');
+                }
+                
+                const result = await response.json();
+                alert(result.message || `已删除 ${logIds.length} 条日志`);
+                
+                // 取消全选
+                const selectAllCheckbox = document.getElementById('selectAllLogs');
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.checked = false;
+                }
+                
+                loadKeepAliveLogs();
+            } catch (error) {
+                alert('批量删除失败: ' + error.message);
+            }
+        }
+
+        function toggleAccountDetail(accountId) {
+            if (expandedAccounts.has(accountId)) {
+                expandedAccounts.delete(accountId);
+            } else {
+                expandedAccounts.add(accountId);
+            }
+            // 重新渲染以更新展开状态
+            if (currentLogId) {
+                loadAccountLogs(currentLogId, true);
+            }
+        }
+        
+        function renderAccountLogs(accountLogs, container, logId) {
+            if (accountLogs.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-tertiary);">暂无日志详情</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table style="width: 100%; font-size: 0.875rem;">
+                    <thead>
+                        <tr style="background: rgba(30, 41, 59, 0.5);">
+                            <th style="padding: 0.5rem; text-align: left; width: 30px;"></th>
+                            <th style="padding: 0.5rem; text-align: left;">账号</th>
+                            <th style="padding: 0.5rem; text-align: left;">开始时间</th>
+                            <th style="padding: 0.5rem; text-align: left;">结束时间</th>
+                            <th style="padding: 0.5rem; text-align: left;">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${accountLogs.map((log, index) => {
+                            const accountId = `account-${logId}-${index}`;
+                            const isExpanded = expandedAccounts.has(accountId);
+                            const statusClass = log.status === 'success' ? 'status-available' : 
+                                              log.status === 'error' ? 'status-unavailable' : 
+                                              log.status === 'cancelled' ? 'status-unknown' : 'status-running';
+                            const statusText = log.status === 'success' ? '成功' : 
+                                              log.status === 'error' ? '失败' : 
+                                              log.status === 'cancelled' ? '已中断' : '执行中';
+                            const startTime = new Date(log.started_at).toLocaleString('zh-CN', { 
+                                timeZone: 'Asia/Shanghai',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                            });
+                            const endTime = log.finished_at ? new Date(log.finished_at).toLocaleString('zh-CN', { 
+                                timeZone: 'Asia/Shanghai',
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit'
+                            }) : '-';
+                            
+                            // 解析消息中的详细日志
+                            const detailLines = log.message ? log.message.split('\n').filter(line => line.trim()) : [];
+                            const hasDetails = detailLines.length > 0;
+                            
+                            return `
+                                <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                                    <td style="padding: 0.5rem; text-align: center;">
+                                        ${hasDetails ? `<button onclick="toggleAccountDetail('${accountId}')" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem; padding: 0.25rem;">${isExpanded ? '▼' : '▶'}</button>` : ''}
+                                    </td>
+                                    <td style="padding: 0.5rem;">${(log.account_name || log.account_email || '-').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+                                    <td style="padding: 0.5rem;">${startTime}</td>
+                                    <td style="padding: 0.5rem;">${endTime}</td>
+                                    <td style="padding: 0.5rem;"><span class="status-badge ${statusClass}">${statusText}</span></td>
+                                </tr>
+                                ${isExpanded && hasDetails ? `
+                                    <tr id="${accountId}-detail" style="background: rgba(15, 23, 42, 0.3);">
+                                        <td colspan="5" style="padding: 1rem;">
+                                            <div style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.75rem; line-height: 1.8; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word;">
+                                                ${detailLines.map(line => {
+                                                    let color = 'var(--text-secondary)';
+                                                    if (line.includes('✅')) color = '#10b981';
+                                                    else if (line.includes('❌')) color = '#ef4444';
+                                                    else if (line.includes('🛑')) color = '#f59e0b';
+                                                    else if (line.includes('⏳')) color = '#3b82f6';
+                                                    return `<div style="color: ${color};">${escapeHtml(line)}</div>`;
+                                                }).join('')}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ` : ''}
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 页面加载时加载保活任务
+        window.addEventListener('load', () => {
+            notifyParentModalOpen();
+            keepAliveTaskRendered = false; // Reset render flag
+            loadKeepAliveTask();
+            // Check if there's a running task, auto-load if so
+            setTimeout(() => {
+                autoLoadRunningLog();
+            }, 1000);
+            // Apply i18n translations
+            if (typeof I18n !== 'undefined') {
+                I18n.translatePage();
+            }
+        });
+        
+        // 页面卸载时通知父窗口
+        window.addEventListener('beforeunload', () => {
+            notifyParentModalClose();
+            stopKeepAliveAutoRefresh();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线对话 - Gemini Link System</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 100%;
+            margin: 0 auto;
+            background: var(--bg-body);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .chat-header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .chat-header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .model-selector {
+            padding: 0.5rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .message {
+            display: flex;
+            gap: 1rem;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1.2rem;
+        }
+
+        .message.user .message-avatar {
+            background: var(--primary-gradient);
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        }
+
+        .message-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1rem 1.25rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+            max-width: 800px;
+            overflow-x: auto;
+        }
+
+        .message-content * {
+            line-height: 1.5;
+        }
+
+        .message-content p {
+            margin: 0.25rem 0;
+        }
+
+        .message-content br {
+            line-height: 1.5;
+        }
+
+        /* 表格样式 */
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.25rem 0;
+            font-size: 0.95em;
+        }
+
+        .message-content table th,
+        .message-content table td {
+            border: 1px solid var(--border-color);
+            padding: 0.25rem 0.4rem;
+            text-align: left;
+            line-height: 1.5;
+        }
+
+        .message-content table th {
+            background: rgba(99, 102, 241, 0.1);
+            font-weight: 500;
+        }
+
+        .message-content table tr {
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .message.user .message-content img {
+            max-width: 400px !important;
+            width: 100%;
+            height: auto;
+            border-radius: var(--radius-md);
+            margin: 0.5rem 0;
+            display: block;
+        }
+
+        .message-content pre {
+            background: var(--bg-input);
+            padding: 0.75rem;
+            border-radius: var(--radius-md);
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+
+        .message-content code {
+            background: var(--bg-input);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .message-content img {
+            max-width: 600px !important;
+            width: 100%;
+            height: auto;
+            border-radius: var(--radius-md);
+            margin: 0.5rem 0;
+            display: block;
+        }
+
+        .thinking-section {
+            margin: 0 0 0.75rem 0;
+            padding: 0.75rem;
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 3px solid var(--primary-color);
+            border-radius: var(--radius-md);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1;
+        }
+
+        .thinking-section summary {
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--primary-color);
+            margin-bottom: 0;
+            line-height: 1;
+        }
+
+        .chat-input-container {
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            flex-shrink: 0;
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .file-upload-btn {
+            padding: 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+        }
+
+        .file-upload-btn:hover {
+            background: var(--bg-card);
+            border-color: var(--primary-color);
+        }
+
+        .file-upload-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-preview {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-input);
+            border-radius: var(--radius-md);
+        }
+
+        .file-preview-item {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-preview-item img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+
+        .file-preview-item .file-icon {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-align: center;
+            padding: 0.25rem;
+            word-break: break-all;
+            overflow: hidden;
+        }
+
+        .file-preview-item .file-icon svg {
+            width: 24px;
+            height: 24px;
+            margin-bottom: 0.25rem;
+        }
+
+        .file-preview-item .remove-file {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .file-preview-item .remove-file:hover {
+            background: #dc2626;
+        }
+
+        .chat-input {
+            flex: 1;
+            min-height: 60px;
+            max-height: 200px;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none;
+            overflow-y: auto;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .send-button {
+            padding: 0.75rem 2rem;
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: var(--radius-lg);
+            color: white;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            flex-shrink: 0;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pause-button {
+            padding: 0.75rem 1rem;
+            background: var(--warning-color, #f59e0b);
+            border: none;
+            border-radius: var(--radius-lg);
+            color: white;
+            font-size: 1.2rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        .pause-button:hover:not(:disabled) {
+            background: var(--warning-hover, #d97706);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .pause-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--text-secondary);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 正在思考动画 - 旋转圆圈 */
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 0;
+        }
+
+        .thinking-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(99, 102, 241, 0.2);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: thinking-spin 0.8s linear infinite;
+        }
+
+        @keyframes thinking-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 3rem;
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* 数学公式样式 */
+        .math-block {
+            margin: 0.25rem 0;
+            padding: 0.25rem 0;
+            text-align: center;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        .math-inline {
+            display: inline-block;
+            margin: 0 0.15em;
+            vertical-align: baseline;
+        }
+
+        /* KaTeX 样式覆盖 */
+        .katex {
+            font-size: 1.05em;
+        }
+
+        .katex-display {
+            margin: 0.25rem 0 !important;
+        }
+
+        .message-content .katex-display {
+            margin: 0.25rem 0 !important;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        .message-content .katex {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <h1>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                在线对话
+            </h1>
+            <div class="chat-header-actions">
+                <select id="modelSelect" class="model-selector">
+                    <option value="gemini-auto">gemini-auto (自动)</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (快速)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro (平衡)</option>
+                    <option value="gemini-3-pro-preview" selected>gemini-3-pro-preview (旗舰)</option>
+                </select>
+                <a href="/static/dashboard.html" class="btn-secondary">返回管理</a>
+                <button id="clearChatBtn" class="btn-secondary">清空对话</button>
+            </div>
+        </header>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <p>开始对话吧！输入消息后按 Enter 或点击发送按钮。</p>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div id="filePreview" class="file-preview" style="display: none;"></div>
+            <div class="chat-input-wrapper">
+                <label for="fileInput" class="file-upload-btn" title="上传文件">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </label>
+                <input type="file" id="fileInput" class="file-input" multiple>
+                <textarea id="chatInput" class="chat-input" placeholder="输入消息... (Shift+Enter 换行，Enter 发送)" rows="1"></textarea>
+                <button id="pauseButton" class="pause-button" disabled title="暂停">⏸</button>
+                <button id="sendButton" class="send-button">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/static/index.html';
+        }
+
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatInput');
+        const sendButton = document.getElementById('sendButton');
+        const pauseButton = document.getElementById('pauseButton');
+        const modelSelect = document.getElementById('modelSelect');
+        const clearChatBtn = document.getElementById('clearChatBtn');
+        
+        let abortController = null; // 用于控制请求中断
+
+        let messages = [];
+        let currentStreamingMessage = null;
+        let uploadedFiles = []; // 存储上传的文件 {file: File, base64: string, mime: string, name: string}
+
+        // 自动调整输入框高度
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+        });
+
+        // Enter 发送，Shift+Enter 换行
+        chatInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // 文件选择处理
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+
+        fileInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                try {
+                    const base64 = await fileToBase64(file);
+                    uploadedFiles.push({
+                        file: file,
+                        base64: base64,
+                        mime: file.type || 'application/octet-stream',
+                        name: file.name,
+                        size: file.size
+                    });
+                    updateFilePreview();
+                } catch (error) {
+                    console.error('文件读取失败:', error);
+                    alert(`文件 ${file.name} 读取失败`);
+                }
+            }
+            // 清空文件选择器，允许重复选择同一文件
+            fileInput.value = '';
+        });
+
+        // 文件转 base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // 获取文件图标
+        function getFileIcon(mimeType) {
+            if (mimeType.startsWith('image/')) {
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
+            } else if (mimeType.includes('pdf')) {
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>';
+            } else if (mimeType.includes('text') || mimeType.includes('json') || mimeType.includes('xml')) {
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>';
+            } else {
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>';
+            }
+        }
+
+        // 更新文件预览
+        function updateFilePreview() {
+            if (uploadedFiles.length === 0) {
+                filePreview.style.display = 'none';
+                return;
+            }
+
+            filePreview.style.display = 'flex';
+            filePreview.innerHTML = uploadedFiles.map((item, index) => {
+                const isImage = item.mime.startsWith('image/');
+                if (isImage) {
+                    return `
+                        <div class="file-preview-item">
+                            <img src="data:${item.mime};base64,${item.base64}" alt="${item.name}">
+                            <button class="remove-file" onclick="removeFile(${index})" title="移除">×</button>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="file-preview-item">
+                            <div class="file-icon">
+                                ${getFileIcon(item.mime)}
+                                <span style="font-size: 0.6rem; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${item.name}</span>
+                            </div>
+                            <button class="remove-file" onclick="removeFile(${index})" title="移除">×</button>
+                        </div>
+                    `;
+                }
+            }).join('');
+        }
+
+        // 移除文件（全局函数，供 onclick 调用）
+        window.removeFile = function(index) {
+            uploadedFiles.splice(index, 1);
+            updateFilePreview();
+        };
+
+        // 发送消息
+        async function sendMessage() {
+            const content = chatInput.value.trim();
+            const hasFiles = uploadedFiles.length > 0;
+            
+            if (!content && !hasFiles) return;
+            if (sendButton.disabled) return;
+
+            // 构建消息内容
+            let messageContent = content;
+            let messageImages = [];
+            let fileInfoText = '';
+
+            // 如果有上传的文件，构建包含文件的消息格式
+            if (hasFiles) {
+                const imageFiles = [];
+                const otherFiles = [];
+
+                // 分离图片文件和其他文件
+                uploadedFiles.forEach(item => {
+                    if (item.mime.startsWith('image/')) {
+                        imageFiles.push(item);
+                    } else {
+                        otherFiles.push(item);
+                    }
+                });
+
+                // 处理图片文件（使用 image_url 格式）
+                if (imageFiles.length > 0) {
+                    messageImages = imageFiles.map(item => ({
+                        type: "image_url",
+                        image_url: {
+                            url: `data:${item.mime};base64,${item.base64}`
+                        }
+                    }));
+                }
+
+                // 处理非图片文件（以文本形式发送文件信息）
+                if (otherFiles.length > 0) {
+                    const fileInfoList = otherFiles.map(item => {
+                        const size = formatFileSize(item.size || 0);
+                        return `📎 ${item.name} (${size}, ${item.mime})`;
+                    });
+                    fileInfoText = '\n\n' + fileInfoList.join('\n');
+                }
+
+                // 组合消息内容
+                if (messageImages.length > 0) {
+                    // 有图片，使用数组格式
+                    const textParts = [];
+                    if (content || fileInfoText) {
+                        textParts.push({ 
+                            type: "text", 
+                            text: (content || '') + fileInfoText 
+                        });
+                    }
+                    messageContent = [...textParts, ...messageImages];
+                    if (messageContent.length === 0) {
+                        messageContent = messageImages;
+                    }
+                } else if (fileInfoText) {
+                    // 只有非图片文件，添加到文本内容
+                    messageContent = (content || '') + fileInfoText;
+                }
+            }
+
+            // 添加用户消息（显示文本、图片预览和文件信息）
+            let displayContent = content;
+            if (hasFiles) {
+                const imagePreviews = uploadedFiles
+                    .filter(item => item.mime.startsWith('image/'))
+                    .map(item => `![${item.name}](data:${item.mime};base64,${item.base64})`)
+                    .join('\n');
+                
+                const fileInfo = uploadedFiles
+                    .filter(item => !item.mime.startsWith('image/'))
+                    .map(item => {
+                        const size = formatFileSize(item.size || 0);
+                        return `📎 ${item.name} (${size})`;
+                    })
+                    .join('\n');
+
+                const parts = [];
+                if (content) parts.push(content);
+                if (imagePreviews) parts.push(imagePreviews);
+                if (fileInfo) parts.push(fileInfo);
+                displayContent = parts.join('\n\n');
+            }
+            addMessage('user', displayContent);
+            
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+            uploadedFiles = [];
+            updateFilePreview();
+
+            // 保存到消息历史
+            messages.push({ role: 'user', content: messageContent });
+
+            // 禁用输入
+            sendButton.disabled = true;
+            chatInput.disabled = true;
+            sendButton.innerHTML = '<span class="loading-indicator"></span>';
+            pauseButton.disabled = false; // 启用暂停按钮
+
+            // 创建 AbortController 用于中断请求
+            abortController = new AbortController();
+
+            try {
+                const model = modelSelect.value;
+                const response = await fetch('/admin/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: messages,
+                        stream: true,
+                        temperature: 0.7
+                    }),
+                    signal: abortController.signal
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/index.html';
+                    return;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '请求失败');
+                }
+
+                // 创建助手消息容器，显示"正在思考"旋转圆圈动画
+                const assistantMessageId = addMessage('assistant', '<div class="thinking-indicator"><div class="thinking-spinner"></div></div>');
+                currentStreamingMessage = assistantMessageId;
+                let fullContent = '';
+                let thinkingContent = '';
+                let buffer = ''; // 用于处理可能被分割的 JSON
+                let hasReceivedContent = false; // 标记是否已收到内容
+
+                // 处理流式响应
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    // 检查是否已中断
+                    if (abortController && abortController.signal.aborted) {
+                        try {
+                            reader.cancel();
+                        } catch (e) {
+                            // 忽略取消错误
+                        }
+                        break;
+                    }
+                    
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        // 处理剩余的 buffer
+                        if (buffer.trim()) {
+                            const lines = buffer.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const data = line.slice(6);
+                                    if (data === '[DONE]') continue;
+                                    try {
+                                        const json = JSON.parse(data);
+                                        const delta = json.choices[0]?.delta;
+                                        if (delta?.content) {
+                                            fullContent += delta.content;
+                                        }
+                                        if (delta?.thinking) {
+                                            thinkingContent = delta.thinking;
+                                        }
+                                    } catch (e) {
+                                        // 忽略解析错误
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    // 保留最后一个不完整的行
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+
+                            try {
+                                const json = JSON.parse(data);
+                                const delta = json.choices[0]?.delta;
+
+                                // 处理思考过程（优先使用 thinking 字段）
+                                if (delta?.thinking) {
+                                    thinkingContent = delta.thinking;
+                                    // 立即更新显示，但不包含 content
+                                    updateMessage(assistantMessageId, fullContent, thinkingContent);
+                                }
+                                
+                                // 处理内容
+                                if (delta?.content) {
+                                    // 标记已收到内容，移除"正在思考"动画
+                                    if (!hasReceivedContent) {
+                                        hasReceivedContent = true;
+                                        fullContent = ''; // 重置内容，移除"正在思考"提示
+                                    }
+                                    
+                                    let content = delta.content;
+                                    
+                                    // 如果已经收到 thinking 字段，完全移除 content 中的思考过程 HTML
+                                    if (thinkingContent) {
+                                        // 更彻底的正则匹配，包括各种可能的格式
+                                        content = content
+                                            .replace(/<details><summary>显示思路<\/summary>[\s\S]*?<\/details>/gi, '')
+                                            .replace(/<details><summary>显示思路<\/summary>[\s\S]*?<\/details>/g, '')
+                                            .replace(/显示思路[\s\S]*?<\/details>/g, '')
+                                            .trim();
+                                    } else {
+                                        // 如果还没有收到 thinking 字段，尝试从 content 中提取
+                                        const thinkingMatch = content.match(/<details><summary>显示思路<\/summary>\s*\n*\n*([\s\S]*?)\n*\n*<\/details>/i);
+                                        if (thinkingMatch) {
+                                            thinkingContent = thinkingMatch[1].trim();
+                                            // 移除思考过程 HTML
+                                            content = content.replace(/<details><summary>显示思路<\/summary>[\s\S]*?<\/details>/gi, '').trim();
+                                        }
+                                    }
+                                    
+                                    // 只添加非空的 content
+                                    if (content) {
+                                        fullContent += content;
+                                    }
+                                    // 立即更新显示，实现流式输出
+                                    updateMessage(assistantMessageId, fullContent, thinkingContent);
+                                }
+                            } catch (e) {
+                                // 忽略解析错误，可能是 JSON 不完整
+                            }
+                        }
+                    }
+                }
+                
+                // 流式输出完成后，最终更新一次以确保图片正确显示
+                // 如果还没有收到任何内容，移除"正在思考"提示
+                if (!hasReceivedContent && fullContent === '') {
+                    updateMessage(assistantMessageId, '暂无回复', thinkingContent);
+                } else {
+                    updateMessage(assistantMessageId, fullContent, thinkingContent);
+                }
+
+                // 保存助手回复
+                messages.push({ role: 'assistant', content: fullContent });
+                currentStreamingMessage = null;
+
+            } catch (error) {
+                // 如果是用户主动中断，不显示错误
+                if (error.name === 'AbortError') {
+                    // 用户主动暂停，移除转圈动画并更新消息
+                    if (currentStreamingMessage) {
+                        const messageEl = document.getElementById(currentStreamingMessage);
+                        if (messageEl) {
+                            const contentEl = messageEl.querySelector('.message-content');
+                            if (contentEl) {
+                                // 移除转圈动画
+                                const thinkingIndicator = contentEl.querySelector('.thinking-indicator');
+                                if (thinkingIndicator) {
+                                    thinkingIndicator.remove();
+                                }
+                                // 如果内容为空，显示"已暂停"
+                                if (contentEl.textContent.trim() === '' || contentEl.innerHTML.includes('thinking-spinner')) {
+                                    updateMessage(currentStreamingMessage, fullContent || '已暂停', thinkingContent);
+                                } else {
+                                    // 如果有内容，只移除动画，保留内容
+                                    updateMessage(currentStreamingMessage, fullContent, thinkingContent);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    addMessage('assistant', `❌ 错误: ${error.message}`, true);
+                }
+            } finally {
+                sendButton.disabled = false;
+                chatInput.disabled = false;
+                sendButton.textContent = '发送';
+                pauseButton.disabled = true; // 禁用暂停按钮（因为没有正在进行的请求）
+                abortController = null;
+                chatInput.focus();
+            }
+        }
+
+        // 添加消息
+        function addMessage(role, content, isError = false) {
+            const emptyState = chatMessages.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const messageId = 'msg-' + Date.now();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.id = messageId;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = role === 'user' ? '👤' : '🤖';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            if (isError) {
+                contentDiv.style.color = 'var(--danger-color)';
+            }
+            // 如果是思考指示器，直接设置 HTML，不经过 formatMessage
+            if (content.includes('thinking-indicator')) {
+                contentDiv.innerHTML = content;
+            } else {
+                contentDiv.innerHTML = formatMessage(content, role === 'user');
+            }
+
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+
+            // 渲染数学公式
+            setTimeout(() => {
+                renderMath(contentDiv);
+            }, 50);
+
+            // 滚动到底部
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            return messageId;
+        }
+
+        // 更新消息内容（流式）
+        function updateMessage(messageId, content, thinking = '') {
+            const messageDiv = document.getElementById(messageId);
+            if (!messageDiv) return;
+
+            const contentDiv = messageDiv.querySelector('.message-content');
+            
+            // 在格式化前移除思考过程 HTML（避免重复显示）
+            let cleanContent = content;
+            if (thinking && thinking.trim()) {
+                // 如果已经有 thinking 字段，彻底移除 content 中的思考过程相关 HTML
+                cleanContent = cleanContent
+                    .replace(/<details><summary>显示思路<\/summary>[\s\S]*?<\/details>/gi, '')
+                    .replace(/<details>[\s\S]*?显示思路[\s\S]*?<\/details>/gi, '')
+                    .replace(/显示思路[\s\S]*?<\/details>/gi, '')
+                    .replace(/思考过程[\s\S]*?<\/details>/gi, '')
+                    .trim();
+            }
+            
+            // 判断是否是用户消息
+            const isUserMessage = messageDiv.classList.contains('user');
+            let html = formatMessage(cleanContent, isUserMessage);
+
+            // 只在有思考内容且内容不为空时显示
+            if (thinking && thinking.trim()) {
+                // 格式化思考内容（换行处理）
+                const formattedThinking = thinking.split('\n').map(line => escapeHtml(line.trim())).filter(line => line).join('\n');
+                html = `<div class="thinking-section"><details><summary>💭 思考过程</summary><pre style="white-space: pre-wrap; word-wrap: break-word;">${formattedThinking}</pre></details></div>` + html;
+            }
+
+            contentDiv.innerHTML = html;
+
+            // 渲染数学公式
+            setTimeout(() => {
+                renderMath(contentDiv);
+            }, 50);
+            
+            // 确保图片正确加载（处理可能的延迟或分割的 base64 数据）
+            setTimeout(() => {
+                const images = contentDiv.querySelectorAll('img[src^="data:"]');
+                images.forEach(img => {
+                    if (!img.complete || img.naturalHeight === 0) {
+                        // 图片加载失败，尝试重新设置 src
+                        const src = img.getAttribute('src');
+                        if (src) {
+                            img.src = '';
+                            img.src = src;
+                        }
+                    }
+                });
+            }, 100);
+
+            // 滚动到底部
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 格式化消息内容（Markdown 完整支持）
+        function formatMessage(content, isUserMessage = false) {
+            if (!content) return '';
+
+            // 先彻底移除可能残留的思考过程 HTML 和转圈动画
+            content = content
+                .replace(/<details><summary>显示思路<\/summary>[\s\S]*?<\/details>/gi, '')
+                .replace(/<details>[\s\S]*?显示思路[\s\S]*?<\/details>/gi, '')
+                .replace(/显示思路[\s\S]*?<\/details>/gi, '')
+                .replace(/<div[^>]*class="thinking-indicator"[^>]*>[\s\S]*?<\/div>/gi, '')
+                .replace(/<div[^>]*thinking-indicator[^>]*>[\s\S]*?<\/div>/gi, '')
+                .trim();
+
+            // 保存已存在的 HTML 标签（图片、链接、代码块等）
+            const htmlPlaceholders = {};
+            let placeholderIndex = 0;
+            // 保存其他 HTML 标签
+            content = content.replace(/<(img|a|pre|code|strong|em|details|summary|div)[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
+                const placeholder = `__HTML_PLACEHOLDER_${placeholderIndex}__`;
+                htmlPlaceholders[placeholder] = match;
+                placeholderIndex++;
+                return placeholder;
+            });
+
+            // 转义 HTML
+            let html = escapeHtml(content);
+
+            // 恢复已存在的 HTML 标签
+            for (const [placeholder, tag] of Object.entries(htmlPlaceholders)) {
+                html = html.replace(placeholder, tag);
+            }
+
+            // Markdown 表格处理（必须在其他处理之前）
+            html = html.replace(/\|(.+)\|/g, (match, row) => {
+                const cells = row.split('|').map(cell => cell.trim());
+                return '|' + cells.join('|') + '|';
+            });
+            
+            // 检测表格
+            const tableRegex = /(\|.+\|\n\|[:\-| ]+\|\n)(\|.+\|\n?)+/g;
+            html = html.replace(tableRegex, (match) => {
+                const lines = match.trim().split('\n');
+                if (lines.length < 2) return match;
+                
+                const headerRow = lines[0];
+                const separatorRow = lines[1];
+                const dataRows = lines.slice(2);
+                
+                const headerCells = headerRow.split('|').filter(c => c.trim()).map(c => c.trim());
+                let tableHtml = '<table><thead><tr>';
+                headerCells.forEach(cell => {
+                    tableHtml += `<th>${cell}</th>`;
+                });
+                tableHtml += '</tr></thead><tbody>';
+                
+                dataRows.forEach(row => {
+                    const cells = row.split('|').filter(c => c.trim()).map(c => c.trim());
+                    if (cells.length > 0) {
+                        tableHtml += '<tr>';
+                        cells.forEach(cell => {
+                            tableHtml += `<td>${cell}</td>`;
+                        });
+                        tableHtml += '</tr>';
+                    }
+                });
+                
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            });
+
+            // 标题（### 标题）
+            html = html.replace(/^### (.+)$/gm, '<h3 style="margin: 0.5rem 0; line-height: 1.5; font-size: 1.2rem; font-weight: 600;">$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2 style="margin: 0.5rem 0; line-height: 1.5; font-size: 1.4rem; font-weight: 600;">$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1 style="margin: 0.5rem 0; line-height: 1.5; font-size: 1.6rem; font-weight: 600;">$1</h1>');
+
+            // 水平线
+            html = html.replace(/^---$/gm, '<hr style="border: none; border-top: 1px solid var(--border-color); margin: 0.5rem 0; line-height: 1.5;">');
+            html = html.replace(/^___$/gm, '<hr style="border: none; border-top: 1px solid var(--border-color); margin: 0.5rem 0; line-height: 1.5;">');
+            html = html.replace(/^\*\*\*$/gm, '<hr style="border: none; border-top: 1px solid var(--border-color); margin: 0.5rem 0; line-height: 1.5;">');
+
+            // 无序列表
+            html = html.replace(/^[\*\-\+] (.+)$/gm, '<li style="line-height: 1.5; margin: 0.25rem 0;">$1</li>');
+            html = html.replace(/(<li[^>]*>.*<\/li>\n?)+/g, (match) => {
+                return '<ul style="margin: 0.5rem 0; padding-left: 1.5rem; line-height: 1.5;">' + match + '</ul>';
+            });
+
+            // 有序列表
+            html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+            // 注意：有序列表需要更复杂的处理，这里简化处理
+
+            // 代码块（必须在行内代码之前）
+            html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                return `<pre style="background: var(--bg-input); padding: 0.75rem; border-radius: var(--radius-md); overflow-x: auto; margin: 0.5rem 0; line-height: 1.5;"><code style="line-height: 1.5;">${escapeHtml(code.trim())}</code></pre>`;
+            });
+
+            // 行内代码
+            html = html.replace(/`([^`\n]+)`/g, '<code style="background: var(--bg-input); padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.9em;">$1</code>');
+
+            // 粗体
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+            // 斜体
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+            // 删除线
+            html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+
+            // 图片（base64）- 必须在链接之前处理，避免被链接正则匹配
+            // 根据消息类型设置不同的最大宽度
+            const maxImageWidth = isUserMessage ? '400px' : '600px';
+            
+            // 先处理完整的图片链接（标准格式，base64 数据可能很长，使用非贪婪匹配到右括号）
+            html = html.replace(/!\[([^\]]*)\]\(data:([^;]+);base64,([A-Za-z0-9+\/=]+)\)/g, (match, alt, mime, base64) => {
+                // base64 数据必须足够长（图片至少几百字符）
+                if (base64.length > 100 && /^[A-Za-z0-9+\/=]+$/.test(base64)) {
+                    return `<img src="data:${mime};base64,${base64}" alt="${alt || '生成的图片'}" style="max-width: ${maxImageWidth} !important; width: 100%; height: auto; border-radius: var(--radius-md); margin: 0.5rem 0; display: block;" />`;
+                }
+                return match;
+            });
+            
+            // 再处理可能包含空白字符或换行的 base64 数据（流式输出时可能被分割）
+            // 匹配到换行、结束标签或字符串结尾，使用非贪婪匹配
+            html = html.replace(/!\[([^\]]*)\]\(data:([^;]+);base64,([A-Za-z0-9+\/=\s\n\r]+?)(?:\n\n|<\/|\)|$)/g, (match, alt, mime, base64) => {
+                // 清理 base64 数据中的空白字符
+                const cleanBase64 = base64.replace(/[\s\n\r]+/g, '');
+                // 只处理足够长的 base64 数据（避免误匹配，base64 图片通常至少几百字符）
+                if (cleanBase64.length > 100 && /^[A-Za-z0-9+\/=]+$/.test(cleanBase64)) {
+                    return `<img src="data:${mime};base64,${cleanBase64}" alt="${alt || '生成的图片'}" style="max-width: ${maxImageWidth} !important; width: 100%; height: auto; border-radius: var(--radius-md); margin: 0.5rem 0; display: block;" />`;
+                }
+                return match;
+            });
+
+            // 链接（必须在图片之后，避免匹配图片格式）
+            // 排除以 data: 开头的链接（这些是图片）
+            html = html.replace(/\[([^\]]+)\]\((?!data:)([^\)]+)\)/g, '<a href="$2" target="_blank" style="color: var(--primary-color); text-decoration: underline;">$1</a>');
+
+            // 引用块
+            html = html.replace(/^> (.+)$/gm, '<blockquote style="border-left: 3px solid var(--primary-color); padding-left: 1rem; margin: 0.5rem 0; line-height: 1.5; color: var(--text-secondary);">$1</blockquote>');
+
+            // 数学公式处理（必须在换行之前）
+            // 先保存已存在的公式元素，避免重复处理
+            const existingMath = {};
+            html = html.replace(/<(div|span)[^>]*class="(math-block|math-inline)"[^>]*>[\s\S]*?<\/\1>/gi, (match) => {
+                const placeholder = `__MATH_PLACEHOLDER_${Object.keys(existingMath).length}__`;
+                existingMath[placeholder] = match;
+                return placeholder;
+            });
+            
+            // 块级公式 $$...$$（只匹配未处理的）
+            html = html.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+                // 检查是否已经被处理过
+                if (match.includes('math-block') || match.includes('katex')) {
+                    return match;
+                }
+                const id = 'math-block-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                return `<div class="math-block" id="${id}">${escapeHtml(formula.trim())}</div>`;
+            });
+            
+            // 行内公式 $...$（只匹配未处理的，排除块级公式）
+            html = html.replace(/\$([^\$\n]+?)\$/g, (match, formula) => {
+                // 检查是否已经被处理过或者是块级公式的一部分
+                if (match.includes('math-inline') || match.includes('math-block') || match.includes('katex')) {
+                    return match;
+                }
+                // 排除块级公式的边界
+                if (match.startsWith('$$') || match.endsWith('$$')) {
+                    return match;
+                }
+                const id = 'math-inline-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                return `<span class="math-inline" id="${id}">${escapeHtml(formula.trim())}</span>`;
+            });
+            
+            // 恢复已存在的公式元素
+            for (const [placeholder, mathHtml] of Object.entries(existingMath)) {
+                html = html.replace(placeholder, mathHtml);
+            }
+
+            // 换行处理（最后处理）
+            // 先处理连续的空行，合并为单个换行
+            html = html.replace(/\n{3,}/g, '\n\n');
+            // 将单个换行转换为 <br>，但保留段落结构
+            html = html.replace(/\n/g, '<br>');
+            // 合并连续的 <br>，最多保留两个（段落间距）
+            html = html.replace(/(<br>\s*){3,}/gi, '<br><br>');
+
+            return html;
+        }
+
+        // 渲染数学公式
+        function renderMath(element) {
+            if (typeof katex === 'undefined') {
+                // KaTeX 未加载，等待加载
+                setTimeout(() => renderMath(element), 100);
+                return;
+            }
+
+            try {
+                // 渲染块级公式（只渲染未渲染过的）
+                const blockElements = element.querySelectorAll('.math-block:not(.katex-display):not([data-rendered])');
+                blockElements.forEach(el => {
+                    try {
+                        // 检查是否已经渲染过
+                        if (el.classList.contains('katex-display') || el.querySelector('.katex')) {
+                            return;
+                        }
+                        const formula = el.textContent.trim();
+                        if (formula && !el.hasAttribute('data-rendered')) {
+                            katex.render(formula, el, {
+                                displayMode: true,
+                                throwOnError: false,
+                                errorColor: '#cc0000'
+                            });
+                            el.setAttribute('data-rendered', 'true');
+                        }
+                    } catch (e) {
+                        console.error('Math block render error:', e);
+                    }
+                });
+
+                // 渲染行内公式（只渲染未渲染过的）
+                const inlineElements = element.querySelectorAll('.math-inline:not(.katex):not([data-rendered])');
+                inlineElements.forEach(el => {
+                    try {
+                        // 检查是否已经渲染过
+                        if (el.classList.contains('katex') || el.querySelector('.katex')) {
+                            return;
+                        }
+                        const formula = el.textContent.trim();
+                        if (formula && !el.hasAttribute('data-rendered')) {
+                            katex.render(formula, el, {
+                                displayMode: false,
+                                throwOnError: false,
+                                errorColor: '#cc0000'
+                            });
+                            el.setAttribute('data-rendered', 'true');
+                        }
+                    } catch (e) {
+                        console.error('Math inline render error:', e);
+                    }
+                });
+            } catch (e) {
+                console.error('Math rendering error:', e);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 清空对话
+        clearChatBtn.addEventListener('click', () => {
+            if (confirm('确定要清空所有对话吗？')) {
+                messages = [];
+                chatMessages.innerHTML = `
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <p>开始对话吧！输入消息后按 Enter 或点击发送按钮。</p>
+                    </div>
+                `;
+            }
+        });
+
+        // 发送按钮点击
+        sendButton.addEventListener('click', sendMessage);
+        
+        // 暂停按钮点击事件
+        pauseButton.addEventListener('click', () => {
+            if (abortController && !pauseButton.disabled) {
+                abortController.abort();
+                pauseButton.disabled = true; // 禁用暂停按钮
+                sendButton.disabled = false;
+                chatInput.disabled = false;
+                sendButton.textContent = '发送';
+            }
+        });
+
+        // 聚焦输入框
+        chatInput.focus();
+    </script>
+</body>
+
+</html>
+
